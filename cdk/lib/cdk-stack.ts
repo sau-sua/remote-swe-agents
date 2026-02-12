@@ -55,6 +55,23 @@ export interface MainStackProps extends cdk.StackProps {
    * @default 'us' (Use US CRI profile)
    */
   readonly bedrockCriRegionOverride?: string;
+
+  /**
+   * LLM provider to use ('bedrock' or 'anthropic')
+   * @default 'bedrock'
+   */
+  readonly llmProvider?: string;
+
+  /**
+   * Anthropic API Key parameter name (required when llmProvider is 'anthropic')
+   */
+  readonly anthropicApiKeyParameterName?: string;
+
+  /**
+   * Deploy Bedrock Agent Core Runtime. Set to false to use Claude via Anthropic only (avoids Bedrock agent limit).
+   * @default false
+   */
+  readonly deployBedrockRuntime?: boolean;
 }
 
 export class MainStack extends cdk.Stack {
@@ -112,6 +129,13 @@ export class MainStack extends cdk.Stack {
 
     const storage = new Storage(this, 'Storage', { accessLogBucket });
 
+    const anthropicApiKeyParameter = props.anthropicApiKeyParameterName
+      ? StringParameter.fromStringParameterAttributes(this, 'AnthropicApiKey', {
+          parameterName: props.anthropicApiKeyParameterName,
+          forceDynamicReference: true,
+        })
+      : undefined;
+
     const worker = new Worker(this, 'Worker', {
       vpc,
       storageTable: storage.table,
@@ -141,6 +165,9 @@ export class MainStack extends cdk.Stack {
       webappOriginSourceParameter: originNameParameter,
       additionalManagedPolicies: props.additionalManagedPolicies,
       bedrockCriRegionOverride: props.bedrockCriRegionOverride,
+      llmProvider: props.llmProvider,
+      anthropicApiKeyParameter,
+      deployBedrockRuntime: props.deployBedrockRuntime,
     });
 
     const auth = new Auth(this, 'Auth', {

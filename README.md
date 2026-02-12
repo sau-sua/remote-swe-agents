@@ -91,6 +91,19 @@ aws ssm put-parameter \
     --type String
 ```
 
+**Optional: If Using Anthropic API**
+
+If you plan to use Anthropic API instead of AWS Bedrock, also create an SSM parameter for the Anthropic API key:
+
+```bash
+aws ssm put-parameter \
+    --name /remote-swe/anthropic/api-key \
+    --value "your-anthropic-api-key-here" \
+    --type String
+```
+
+Replace `your-anthropic-api-key-here` with your actual Anthropic API key from [Anthropic Console](https://console.anthropic.com/).
+
 ### Step 3: GitHub Integration Setup
 
 To interact with GitHub, you need to setup GitHub integration. You have two options for GitHub integration:
@@ -193,6 +206,32 @@ INITIAL_WEBAPP_USER_EMAIL=your-email@example.com
 When this variable is set, a Cognito user will be created during deployment, and a temporary password will be sent to the specified email address. You can then use this email and temporary password to log into the webapp.
 
 If you don't set this variable, you can manually create users later through the AWS Cognito Management Console. See [Creating a new user in the AWS Management Console](https://docs.aws.amazon.com/cognito/latest/developerguide/how-to-create-user-accounts.html#creating-a-new-user-using-the-console).
+
+#### For Using Anthropic API Instead of AWS Bedrock:
+
+By default, this system uses AWS Bedrock for LLM inference. However, you can configure it to use Anthropic's API directly instead.
+
+To use Anthropic API, add these variables to your `.env.local` file:
+
+```sh
+LLM_PROVIDER=anthropic
+ANTHROPIC_API_KEY=sk-ant-api03-your-api-key-here
+```
+
+**Benefits of using Anthropic API:**
+- Direct access to Anthropic's latest models without AWS Bedrock service limits
+- May have different rate limits and pricing compared to Bedrock
+- Useful if you already have Anthropic API credits
+
+**To get an Anthropic API key:**
+1. Visit [Anthropic Console](https://console.anthropic.com/)
+2. Sign up or log in to your account
+3. Navigate to API Keys section
+4. Create a new API key
+5. Copy the key (starts with `sk-ant-api03-...`)
+
+> [!NOTE]
+> When using `LLM_PROVIDER=anthropic`, AWS Bedrock configurations (like `BEDROCK_CRI_REGION_OVERRIDE`) will be ignored. Token usage tracking and cost calculations will still work as expected in DynamoDB.
 
 > [!NOTE]
 > We use environment variables here to inject configuration from GitHub Actions variables. If this isn't convenient for you, you can simply hard-code the values in [`bin/cdk.ts`](cdk/bin/cdk.ts).

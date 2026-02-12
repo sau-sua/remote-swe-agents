@@ -35,6 +35,13 @@ export interface WorkerProps {
   webappOriginSourceParameter: IStringParameter;
   additionalManagedPolicies?: string[];
   bedrockCriRegionOverride?: string;
+  llmProvider?: string;
+  anthropicApiKeyParameter?: IStringParameter;
+  /**
+   * Deploy Bedrock Agent Core Runtime. Set to false to use Claude via Anthropic API only (avoids AWS Bedrock agent limit).
+   * @default false
+   */
+  deployBedrockRuntime?: boolean;
 }
 
 export class Worker extends Construct {
@@ -42,7 +49,7 @@ export class Worker extends Construct {
   public readonly bus: WorkerBus;
   public readonly logGroup: logs.LogGroup;
   public readonly imageBuilder: WorkerImageBuilder;
-  public readonly agentCoreRuntime: AgentCoreRuntime;
+  public readonly agentCoreRuntime: AgentCoreRuntime | undefined;
 
   constructor(scope: Construct, id: string, props: WorkerProps) {
     super(scope, id);
@@ -318,6 +325,11 @@ export GITHUB_PERSONAL_ACCESS_TOKEN=${
           ? `$(aws ssm get-parameter --name ${props.githubPersonalAccessTokenParameter.parameterName} --query \"Parameter.Value\" --output text)`
           : '""'
       }
+export ANTHROPIC_API_KEY=${
+        props.anthropicApiKeyParameter
+          ? `$(aws ssm get-parameter --name ${props.anthropicApiKeyParameter.parameterName} --query \"Parameter.Value\" --output text)`
+          : '""'
+      }
 
 # Start app
 cd packages/worker
@@ -362,6 +374,8 @@ Environment=WEBAPP_ORIGIN_NAME_PARAMETER=${props.webappOriginSourceParameter.par
 Environment=BEDROCK_AWS_ACCOUNTS=${props.loadBalancing?.awsAccounts.join(',') ?? ''}
 Environment=BEDROCK_AWS_ROLE_NAME=${props.loadBalancing?.roleName ?? ''}
 Environment=BEDROCK_CRI_REGION_OVERRIDE=${props.bedrockCriRegionOverride ?? ''}
+Environment=LLM_PROVIDER=${props.llmProvider ?? 'bedrock'}
+Environment=ANTHROPIC_API_KEY_PARAMETER_NAME=${props.anthropicApiKeyParameter?.parameterName ?? ''}
 
 [Install]
 WantedBy=multi-user.target
@@ -454,21 +468,25 @@ systemctl start myapp
       sourceAssetHash,
     });
 
-    const agentCoreRuntime = new AgentCoreRuntime(this, 'AgentCore', {
-      storageTable: props.storageTable,
-      imageBucket: props.imageBucket,
-      bus: bus,
-      slackBotTokenParameter: props.slackBotTokenParameter,
-      gitHubApp: props.gitHubApp,
-      gitHubAppPrivateKeyParameter: privateKey,
-      githubPersonalAccessTokenParameter: props.githubPersonalAccessTokenParameter,
-      loadBalancing: props.loadBalancing,
-      accessLogBucket: props.accessLogBucket,
-      amiIdParameterName: props.amiIdParameterName,
-      webappOriginSourceParameter: props.webappOriginSourceParameter,
-      bedrockCriRegionOverride: props.bedrockCriRegionOverride,
-    });
-    this.agentCoreRuntime = agentCoreRuntime;
+    if (props.deployBedrockRuntime) {
+      const agentCoreRuntime = new AgentCoreRuntime(this, 'AgentCore', {
+        storageTable: props.storageTable,
+        imageBucket: props.imageBucket,
+        bus: bus,
+        slackBotTokenParameter: props.slackBotTokenParameter,
+        gitHubApp: props.gitHubApp,
+        gitHubAppPrivateKeyParameter: privateKey,
+        githubPersonalAccessTokenParameter: props.githubPersonalAccessTokenParameter,
+        loadBalancing: props.loadBalancing,
+        accessLogBucket: props.accessLogBucket,
+        amiIdParameterName: props.amiIdParameterName,
+        webappOriginSourceParameter: props.webappOriginSourceParameter,
+        bedrockCriRegionOverride: props.bedrockCriRegionOverride,
+      });
+      this.agentCoreRuntime = agentCoreRuntime;
+    } else {
+      this.agentCoreRuntime = undefined;
+    }
 
     props.webappOriginSourceParameter.grantRead(role);
     role.addToPrincipalPolicy(
@@ -503,6 +521,7 @@ systemctl start myapp
     privateKey?.grantRead(role);
     props.githubPersonalAccessTokenParameter?.grantRead(role);
     props.slackBotTokenParameter.grantRead(role);
+    props.anthropicApiKeyParameter?.grantRead(role);
     bus.api.grantPublishAndSubscribe(role);
     bus.api.grantConnect(role);
 

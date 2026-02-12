@@ -23,7 +23,7 @@ import {
   getCustomAgent,
 } from '@remote-swe-agents/agent-core/lib';
 import pRetry, { AbortError } from 'p-retry';
-import { bedrockConverse } from '@remote-swe-agents/agent-core/lib';
+import { converse } from '@remote-swe-agents/agent-core/lib';
 import { getMcpToolSpecs, tryExecuteMcpTool } from './mcp';
 import {
   addIssueCommentTool,
@@ -208,7 +208,7 @@ const agentLoop = async (workerId: string, cancellationToken: CancellationToken)
     firstCachePoint = secondCachePoint;
 
     class MaxTokenExceededError {}
-    // Will hold the detected budget from bedrockConverse
+    // Will hold the detected budget from converse
     let detectedBudget: number | undefined;
 
     const res = await pRetry(
@@ -216,7 +216,7 @@ const agentLoop = async (workerId: string, cancellationToken: CancellationToken)
         try {
           if (cancellationToken.isCancelled) return;
 
-          const converseResult = await bedrockConverse(
+          const converseResult = await converse(
             workerId,
             [modelOverride],
             {

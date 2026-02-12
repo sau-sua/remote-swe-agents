@@ -30,6 +30,8 @@ export interface AgentCoreRuntimeProps {
   amiIdParameterName: string;
   webappOriginSourceParameter: IStringParameter;
   bedrockCriRegionOverride?: string;
+  llmProvider?: string;
+  anthropicApiKeyParameter?: IStringParameter;
 }
 
 export class AgentCoreRuntime extends Construct implements IGrantable {
@@ -84,6 +86,7 @@ export class AgentCoreRuntime extends Construct implements IGrantable {
     props.gitHubAppPrivateKeyParameter?.grantRead(role);
     props.githubPersonalAccessTokenParameter?.grantRead(role);
     props.slackBotTokenParameter.grantRead(role);
+    props.anthropicApiKeyParameter?.grantRead(role);
     props.webappOriginSourceParameter.grantRead(role);
     props.bus.api.grantPublishAndSubscribe(role);
     props.bus.api.grantConnect(role);
@@ -115,6 +118,8 @@ export class AgentCoreRuntime extends Construct implements IGrantable {
         SLACK_BOT_TOKEN_PARAMETER_NAME: props.slackBotTokenParameter.parameterName ?? '',
         GITHUB_PERSONAL_ACCESS_TOKEN_PARAMETER_NAME: props.githubPersonalAccessTokenParameter?.parameterName ?? '',
         BEDROCK_CRI_REGION_OVERRIDE: props.bedrockCriRegionOverride ?? '',
+        LLM_PROVIDER: props.llmProvider ?? 'bedrock',
+        ANTHROPIC_API_KEY_PARAMETER_NAME: props.anthropicApiKeyParameter?.parameterName ?? '',
       },
     });
     runtime.node.addDependency(role);

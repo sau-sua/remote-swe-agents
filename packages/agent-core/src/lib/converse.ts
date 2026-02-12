@@ -9,10 +9,14 @@ import { AssumeRoleCommand, STSClient } from '@aws-sdk/client-sts';
 import { ddb, TableName } from './aws';
 import { GetCommand, PutCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
 import { criRegion, modelConfigs, ModelType } from '../schema';
+import { anthropicConverse } from './anthropic-client';
 
 const sts = new STSClient();
 const awsAccounts = (process.env.BEDROCK_AWS_ACCOUNTS ?? '').split(',');
 const roleName = process.env.BEDROCK_AWS_ROLE_NAME || 'bedrock-remote-swe-role';
+
+// LLM Provider configuration
+const LLM_PROVIDER = process.env.LLM_PROVIDER || 'bedrock'; // 'bedrock' or 'anthropic'
 
 // State management for persistent account selection and retry
 let currentAccountIndex = 0; // Currently used account index
@@ -22,6 +26,23 @@ const ULTRA_THINKING_KEYWORD = 'ultrathink';
 
 const defaultOutputTokenCount = 8192;
 
+// Main converse function - routes to appropriate provider
+export const converse = async (
+  workerId: string,
+  modelTypes: ModelType[],
+  input: Omit<ConverseCommandInput, 'modelId'>,
+  maxTokensExceededCount = 0
+): Promise<{ response: ConverseResponse; thinkingBudget?: number }> => {
+  if (LLM_PROVIDER === 'anthropic') {
+    return anthropicConverse(workerId, modelTypes, input, maxTokensExceededCount);
+  } else if (LLM_PROVIDER === 'bedrock') {
+    return bedrockConverse(workerId, modelTypes, input, maxTokensExceededCount);
+  } else {
+    throw new Error(`Unknown LLM_PROVIDER: ${LLM_PROVIDER}. Must be 'bedrock' or 'anthropic'`);
+  }
+};
+
+// Bedrock-specific implementation
 export const bedrockConverse = async (
   workerId: string,
   modelTypes: ModelType[],

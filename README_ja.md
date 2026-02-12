@@ -89,6 +89,19 @@ aws ssm put-parameter \
     --type String
 ```
 
+**オプション：Anthropic APIを使用する場合**
+
+AWS Bedrockの代わりにAnthropic APIを使用する予定の場合は、Anthropic APIキーのSSMパラメータも作成します：
+
+```bash
+aws ssm put-parameter \
+    --name /remote-swe/anthropic/api-key \
+    --value "your-anthropic-api-key-here" \
+    --type String
+```
+
+`your-anthropic-api-key-here`を[Anthropic Console](https://console.anthropic.com/)から取得した実際のAnthropic APIキーに置き換えてください。
+
 ### ステップ3：GitHub統合のセットアップ
 
 GitHubと連携するには、GitHub統合のセットアップが必要です。GitHub統合には2つの選択肢があります：
@@ -191,6 +204,32 @@ INITIAL_WEBAPP_USER_EMAIL=your-email@example.com
 この変数が設定されている場合、デプロイ中にCognitoユーザーが作成され、指定されたメールアドレスに一時パスワードが送信されます。このメールと一時パスワードを使用してwebappにログインできます。
 
 この変数を設定しない場合は、後でAWS Cognitoマネジメントコンソールを通じて手動でユーザーを作成できます。[AWS管理コンソールでの新しいユーザーの作成](https://docs.aws.amazon.com/cognito/latest/developerguide/how-to-create-user-accounts.html#creating-a-new-user-using-the-console)を参照してください。
+
+#### AWS Bedrockの代わりにAnthropic APIを使用する場合：
+
+デフォルトでは、このシステムはLLM推論にAWS Bedrockを使用します。ただし、代わりにAnthropicのAPIを直接使用するように設定できます。
+
+Anthropic APIを使用するには、`.env.local` ファイルに以下の変数を追加します：
+
+```sh
+LLM_PROVIDER=anthropic
+ANTHROPIC_API_KEY=sk-ant-api03-your-api-key-here
+```
+
+**Anthropic APIを使用するメリット：**
+- AWS Bedrockのサービス制限なしに、Anthropicの最新モデルに直接アクセスできる
+- Bedrockと比較して異なるレート制限と価格設定がある可能性がある
+- すでにAnthropic APIクレジットをお持ちの場合に便利
+
+**Anthropic APIキーを取得するには：**
+1. [Anthropic Console](https://console.anthropic.com/)にアクセス
+2. アカウントにサインアップまたはログイン
+3. API Keysセクションに移動
+4. 新しいAPIキーを作成
+5. キーをコピー（`sk-ant-api03-...`で始まります）
+
+> [!NOTE]
+> `LLM_PROVIDER=anthropic`を使用する場合、AWS Bedrockの設定（`BEDROCK_CRI_REGION_OVERRIDE`など）は無視されます。トークン使用量の追跡とコスト計算は、DynamoDBで引き続き正常に機能します。
 
 > [!NOTE]
 > ここでは、GitHub Actions変数から設定を注入するために環境変数を使用しています。これが便利でない場合は、[`bin/cdk.ts`](cdk/bin/cdk.ts)内の値を直接ハードコードすることもできます。

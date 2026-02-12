@@ -2,7 +2,7 @@ import { GetCommand, QueryCommand, QueryCommandInput, UpdateCommand, paginateQue
 import { z } from 'zod';
 import { ddb, TableName } from './aws';
 import { AgentStatus, SessionItem, sessionItemSchema } from '../schema';
-import { bedrockConverse } from './converse';
+import { converse } from './converse';
 
 /**
  * Get session information from DynamoDB
@@ -112,7 +112,7 @@ Use the same language that was used in the conversation.
 Messages: ${message}
     `.trim();
 
-    const { response } = await bedrockConverse(workerId, ['haiku3.5'], {
+    const { response } = await converse(workerId, ['haiku3.5'], {
       inferenceConfig: {
         maxTokens: 50,
         temperature: 0.8,
