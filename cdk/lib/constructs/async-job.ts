@@ -33,8 +33,6 @@ export class AsyncJob extends Construct {
       environment: {
         TABLE_NAME: storage.table.tableName,
       },
-      // limit concurrency to mitigate any possible EDoS attacks
-      reservedConcurrentExecutions: 1,
     });
 
     storage.table.grantReadWriteData(handler);

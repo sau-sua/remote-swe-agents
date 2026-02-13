@@ -85,7 +85,7 @@ const convertToAnthropicFormat = (
 } => {
   const modelConfig = modelConfigs[modelType];
 
-  // Convert messages (use ContentBlockParam for request payload)
+  // Convert messages (use ContentBlockParam for request)
   const messages: Anthropic.MessageParam[] = [];
   if (input.messages) {
     for (const msg of input.messages) {
@@ -96,7 +96,6 @@ const convertToAnthropicFormat = (
           if ('text' in c && c.text) {
             content.push({ type: 'text', text: c.text });
           } else if ('image' in c && c.image) {
-            // Handle image content
             const imageData = c.image;
             if ('bytes' in imageData && imageData.bytes) {
               const bytes =
@@ -104,7 +103,7 @@ const convertToAnthropicFormat = (
                   ? imageData.bytes
                   : Array.isArray(imageData.bytes)
                     ? new Uint8Array(imageData.bytes)
-                    : new Uint8Array(Object.values(imageData.bytes as Record<string, number>));
+                    : new Uint8Array(Object.values((imageData.bytes as Record<string, number>) ?? {}));
               const base64Data = Buffer.from(bytes).toString('base64');
               content.push({
                 type: 'image',
@@ -157,7 +156,6 @@ const convertToAnthropicFormat = (
               is_error: toolResult.status === 'error',
             });
           } else if ('reasoningContent' in c && c.reasoningContent) {
-            // Handle reasoning content (thinking blocks). Bedrock may use .text or reasoningText.text.
             const r = c.reasoningContent as unknown as { text?: string; reasoningText?: { text?: string } };
             const thinkingText =
               typeof r.text === 'string'
@@ -188,7 +186,7 @@ const convertToAnthropicFormat = (
     for (const s of input.system) {
       if ('text' in s && s.text) {
         const block: Anthropic.TextBlockParam = { type: 'text', text: s.text };
-        const cachePoint = 'cachePoint' in s ? (s as { cachePoint?: { type?: string } }).cachePoint : undefined;
+        const cachePoint = (s as { cachePoint?: { type?: string } }).cachePoint;
         if (cachePoint?.type === 'default') {
           (block as unknown as Record<string, unknown>).cache_control = { type: 'ephemeral' };
         }
@@ -203,25 +201,22 @@ const convertToAnthropicFormat = (
   if (input.toolConfig?.tools && input.toolConfig.tools.length > 0) {
     tools = [];
     for (const tool of input.toolConfig.tools) {
-      const spec = tool && 'toolSpec' in tool ? tool.toolSpec : undefined;
+      const spec = (tool as { toolSpec?: { name?: string; description?: string; inputSchema?: { json?: Record<string, unknown> } }; cachePoint?: { type?: string } }).toolSpec;
       if (spec) {
-        const rawSchema = spec.inputSchema?.json;
-        const base: Record<string, unknown> =
-          rawSchema != null && typeof rawSchema === 'object' ? (rawSchema as Record<string, unknown>) : {};
+        const base = spec.inputSchema?.json;
         const input_schema: Anthropic.Tool.InputSchema =
-          base.type === 'object'
+          base && typeof base === 'object' && (base as { type?: string }).type === 'object'
             ? (base as Anthropic.Tool.InputSchema)
-            : { type: 'object', ...base };
+            : { type: 'object', properties: {}, required: [] };
         const anthropicTool: Anthropic.Tool = {
           name: spec.name || '',
           description: spec.description,
           input_schema,
         };
-
-        if ('cachePoint' in tool && tool.cachePoint?.type === 'default') {
+        const cachePoint = (tool as { cachePoint?: { type?: string } }).cachePoint;
+        if (cachePoint?.type === 'default') {
           (anthropicTool as unknown as Record<string, unknown>).cache_control = { type: 'ephemeral' };
         }
-
         tools.push(anthropicTool);
       }
     }
@@ -268,7 +263,14 @@ const shouldUltraThink = (input: Omit<ConverseCommandInput, 'modelId'>): boolean
   }
 
   const messageText = lastUserMessage.content
-    .map((content) => ('text' in content ? content.text : ''))
+    .map((content) => {
+      if ('text' in content && content.text) return content.text;
+      if ('reasoningContent' in content && content.reasoningContent) {
+        const r = content.reasoningContent as unknown as { text?: string; reasoningText?: { text?: string } };
+        return r.text ?? r.reasoningText?.text ?? '';
+      }
+      return '';
+    })
     .join(' ')
     .toLowerCase();
 
@@ -289,22 +291,22 @@ const convertFromAnthropicResponse = (
         toolUse: {
           toolUseId: block.id,
           name: block.name,
-          input: block.input,
+          input: (block as Anthropic.ToolUseBlock).input,
         },
       } as ContentBlock);
     } else if (block.type === 'thinking') {
+      const thinking = (block as Anthropic.ThinkingBlock).thinking;
       content.push({
         reasoningContent: {
-          reasoningText: { text: block.thinking },
+          reasoningText: { text: typeof thinking === 'string' ? thinking : '' },
         },
       });
     }
   }
 
-  const inputTokens = response.usage.input_tokens;
-  const outputTokens = response.usage.output_tokens;
-  const cacheRead = (response.usage as { cache_read_input_tokens?: number }).cache_read_input_tokens ?? 0;
-  const cacheWrite = (response.usage as { cache_creation_input_tokens?: number }).cache_creation_input_tokens ?? 0;
+  const usage = response.usage as { input_tokens: number; output_tokens: number; cache_read_input_tokens?: number; cache_creation_input_tokens?: number };
+  const inputTokens = usage.input_tokens ?? 0;
+  const outputTokens = usage.output_tokens ?? 0;
 
   return {
     output: {
@@ -318,8 +320,8 @@ const convertFromAnthropicResponse = (
       inputTokens,
       outputTokens,
       totalTokens: inputTokens + outputTokens,
-      cacheReadInputTokens: cacheRead,
-      cacheWriteInputTokens: cacheWrite,
+      cacheReadInputTokens: usage.cache_read_input_tokens ?? 0,
+      cacheWriteInputTokens: usage.cache_creation_input_tokens ?? 0,
     },
     metrics: undefined,
   };

@@ -1,4 +1,5 @@
-import { IgnoreMode, Duration, CfnOutput, Stack } from 'aws-cdk-lib';
+import { Duration, RemovalPolicy, Stack } from 'aws-cdk-lib';
+import { Repository } from 'aws-cdk-lib/aws-ecr';
 import { Platform } from 'aws-cdk-lib/aws-ecr-assets';
 import { DockerImageFunction, DockerImageCode, Architecture } from 'aws-cdk-lib/aws-lambda';
 import { Construct } from 'constructs';
@@ -31,7 +32,8 @@ export interface WebappProps {
   workerBus: WorkerBus;
   workerAmiIdParameter: IStringParameter;
   originNameParameter: IStringParameter;
-  agentCoreRuntime: AgentCoreRuntime;
+  /** When undefined, Bedrock Agent Core is not deployed (use Claude via Anthropic API). */
+  agentCoreRuntime?: AgentCoreRuntime;
 
   hostedZone?: IHostedZone;
   certificate?: ICertificate;
@@ -56,11 +58,19 @@ export class Webapp extends Construct {
 
     const { storage, hostedZone, auth, subDomain, workerBus, asyncJob, originNameParameter } = props;
 
-    // Use ContainerImageBuild to inject deploy-time values in the build environment
+    // ECR repository name must be lowercase (and digits, . _ - only) per AWS constraint
+    const webappRepository = new Repository(this, 'BuildRepository', {
+      repositoryName: 'remote-swe-webapp',
+      removalPolicy: RemovalPolicy.DESTROY,
+      emptyOnDelete: true,
+    });
+
+    // Use ContainerImageBuild (CodeBuild) to inject deploy-time values in the build environment
     const image = new ContainerImageBuild(this, 'Build', {
       directory: join('..'),
       file: join('docker', 'webapp.Dockerfile'),
       platform: Platform.LINUX_ARM64,
+      repository: webappRepository,
       exclude: [
         ...readFileSync('.dockerignore').toString().split('\n'),
         'packages/github-actions',
@@ -90,7 +100,7 @@ export class Webapp extends Construct {
         EVENT_HTTP_ENDPOINT: props.workerBus.httpEndpoint,
         TABLE_NAME: storage.table.tableName,
         BUCKET_NAME: storage.bucket.bucketName,
-        AGENT_RUNTIME_ARN: props.agentCoreRuntime.runtimeArn,
+        AGENT_RUNTIME_ARN: props.agentCoreRuntime?.runtimeArn ?? '',
         BEDROCK_CRI_REGION_OVERRIDE: props.bedrockCriRegionOverride ?? '',
       },
       memorySize: 1769,
@@ -101,7 +111,7 @@ export class Webapp extends Construct {
     storage.table.grantReadWriteData(handler);
     storage.bucket.grantReadWrite(handler);
     workerBus.api.grantPublish(handler);
-    props.agentCoreRuntime.grantInvoke(handler);
+    props.agentCoreRuntime?.grantInvoke(handler);
 
     handler.addToRolePolicy(
       new PolicyStatement({
