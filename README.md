@@ -1,5 +1,6 @@
 # Remote SWE Agents
 
+Hi
 English | [日本語](README_ja.md)
 
 This is an example implementation of a fully autonomous software development AI agent. The agent works in its own dedicated development environment, freeing you from being tied to your laptop!
@@ -16,22 +17,22 @@ This is an example implementation of a fully autonomous software development AI 
 
 ## Key Features
 
-* **Fully autonomous software development agent** - AI-powered development workflow automation
-* **Web-based management interface** - Modern Next.js webapp for session management and real-time monitoring
-* **Slack App integration** - You can call the agent from Slack.
-* **REST API integration** - RESTful endpoints for programmatic integration
-* **Powered by AWS serverless services** with minimal maintenance costs
-* **No upfront or fixed costs** while you don't use the system
-* **MCP support** through integration with MCP servers
-* **Can work on OSS forked repositories**
+- **Fully autonomous software development agent** - AI-powered development workflow automation
+- **Web-based management interface** - Modern Next.js webapp for session management and real-time monitoring
+- **Slack App integration** - You can call the agent from Slack.
+- **REST API integration** - RESTful endpoints for programmatic integration
+- **Powered by AWS serverless services** with minimal maintenance costs
+- **No upfront or fixed costs** while you don't use the system
+- **MCP support** through integration with MCP servers
+- **Can work on OSS forked repositories**
 
-## Examples 
+## Examples
 
 Some of the agent sessions by Remote SWE agents:
 
-| Example 1 | Example 2 | Example 3 | Example 4 |
-|:--------:|:--------:|:--------:|:--------:|
-| ![example1](./docs/imgs/example1.png) | ![example2](./docs/imgs/example2.png) | ![example3](./docs/imgs/example3.png) | ![example4](./docs/imgs/example4.png) |
+|                                              Example 1                                              |                                                                                                                                    Example 2                                                                                                                                    |                      Example 3                      |                                                           Example 4                                                            |
+| :-------------------------------------------------------------------------------------------------: | :-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------: | :-------------------------------------------------: | :----------------------------------------------------------------------------------------------------------------------------: |
+|                                ![example1](./docs/imgs/example1.png)                                |                                                                                                                      ![example2](./docs/imgs/example2.png)                                                                                                                      |        ![example3](./docs/imgs/example3.png)        |                                             ![example4](./docs/imgs/example4.png)                                              |
 | Instruct via GitHub issue. [Resulting PR](https://github.com/aws-samples/remote-swe-agents/pull/17) | single instruction to multiple repos [PR#1](https://github.com/aws-samples/trpc-nextjs-ssr-prisma-lambda/pull/16), [PR#2](https://github.com/aws-samples/prisma-lambda-cdk/pull/37), [PR#3](https://github.com/aws-samples/distributed-load-testing-with-locust-on-ecs/pull/25) | The agent can also input and output images as well. | The agent can speak other languages than English as well. [Resulting PR](https://github.com/tmokmss/deploy-time-build/pull/32) |
 
 ### Pull Requests Created by the Remote SWE Agents
@@ -109,6 +110,7 @@ Replace `your-anthropic-api-key-here` with your actual Anthropic API key from [A
 To interact with GitHub, you need to setup GitHub integration. You have two options for GitHub integration:
 
 **Which option should you choose?**
+
 - **Personal Access Token (Option 3A)**: Choose this for personal use or quick setup. It's simpler but tied to a single user account.
 - **GitHub App (Option 3B)**: Recommended for team environments or organizational use. Provides more granular permissions and isn't tied to a personal account.
 
@@ -116,8 +118,8 @@ To interact with GitHub, you need to setup GitHub integration. You have two opti
 
 1. Go to [GitHub Settings > Developer settings > Personal access tokens](https://github.com/settings/tokens)
 2. Generate a new token (classic) with appropriate repository access
-   * Required scopes: `repo, workflow, read:org`
-   * The more scopes you permit, the more various tasks agents can perform
+   - Required scopes: `repo, workflow, read:org`
+   - The more scopes you permit, the more various tasks agents can perform
 3. Update the SSM Parameter with the generated token string:
    ```bash
    aws ssm put-parameter \
@@ -219,11 +221,13 @@ ANTHROPIC_API_KEY=sk-ant-api03-your-api-key-here
 ```
 
 **Benefits of using Anthropic API:**
+
 - Direct access to Anthropic's latest models without AWS Bedrock service limits
 - May have different rate limits and pricing compared to Bedrock
 - Useful if you already have Anthropic API credits
 
 **To get an Anthropic API key:**
+
 1. Visit [Anthropic Console](https://console.anthropic.com/)
 2. Sign up or log in to your account
 3. Navigate to API Keys section
@@ -244,7 +248,7 @@ npx cdk bootstrap
 npx cdk deploy --all
 ```
 
-Deployment usually takes about 10 minutes. 
+Deployment usually takes about 10 minutes.
 
 **That's it!** After deployment, you can access your system via the `WebappUrl` shown in the CDK stack output.
 
@@ -415,8 +419,6 @@ As our agent can work as an MCP client, you can easily integrate it with various
 
 All the new agents can now use MCP servers as their tools.
 
-
-
 ## How it works
 
 This system utilizes a Slack Bolt application to manage user interactions and implement a scalable worker system. Here's the main workflow:
@@ -476,26 +478,27 @@ The following table provides a sample cost breakdown for deploying this system i
 
 Here we assume you request 100 sessions per month. The monthly cost is proportional to the number of sessions. (e.g. If you only run 20 session/month, multiply it with 20/100.)
 
-| AWS service | Dimensions | Cost [USD/month] |
-|-------------|------------|------------------|
-| EC2 | t3.large, 1 hour/session | 8.32 |
-| EBS | 30 GB/instance, 1 day/instance | 8.00 |
-| DynamoDB | Read: 1000 RRU/session | 0.0125 |
-| DynamoDB | Write: 200 WRU/session | 0.0125 |
-| DynamoDB | Storage: 2 MB/session | 0.05 |
-| AppSync Events | Requests: 20 events/session | 0.002 |
-| AppSync Events | Connection: 1 hour/session | 0.00048 |
-| Lambda | Requests: 30 invocations/session | 0.0006 |
-| Lambda | Duration: 128MB, 1s/invocation | 0.00017 |
-| API Gateway | Requests: 20 requests/session | 0.002 |
-| Bedrock | Input (cache write): Sonnet 3.7 100k tokens/session | 37.5 |
-| Bedrock | Input (cache read): Sonnet 3.7 1M tokens/session | 30.00 |
-| Bedrock | Output: Sonnet 3.7 20k tokens/session | 30.00 |
-| TOTAL | | 115 |
+| AWS service    | Dimensions                                          | Cost [USD/month] |
+| -------------- | --------------------------------------------------- | ---------------- |
+| EC2            | t3.large, 1 hour/session                            | 8.32             |
+| EBS            | 30 GB/instance, 1 day/instance                      | 8.00             |
+| DynamoDB       | Read: 1000 RRU/session                              | 0.0125           |
+| DynamoDB       | Write: 200 WRU/session                              | 0.0125           |
+| DynamoDB       | Storage: 2 MB/session                               | 0.05             |
+| AppSync Events | Requests: 20 events/session                         | 0.002            |
+| AppSync Events | Connection: 1 hour/session                          | 0.00048          |
+| Lambda         | Requests: 30 invocations/session                    | 0.0006           |
+| Lambda         | Duration: 128MB, 1s/invocation                      | 0.00017          |
+| API Gateway    | Requests: 20 requests/session                       | 0.002            |
+| Bedrock        | Input (cache write): Sonnet 3.7 100k tokens/session | 37.5             |
+| Bedrock        | Input (cache read): Sonnet 3.7 1M tokens/session    | 30.00            |
+| Bedrock        | Output: Sonnet 3.7 20k tokens/session               | 30.00            |
+| TOTAL          |                                                     | 115              |
 
 Additionally, when the system is not in use (i.e., no messages are sent to the agents), the ongoing costs are minimal (~0 USD).
 
 ## Clean up
+
 You can clean up all the resources you created by the following commands:
 
 ```sh
