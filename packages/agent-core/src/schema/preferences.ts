@@ -4,7 +4,7 @@ import { modelTypeSchema } from './model';
 export const globalPreferencesSchema = z.object({
   PK: z.literal('global-config'),
   SK: z.literal('general'),
-  modelOverride: modelTypeSchema.default('sonnet3.7'),
+  modelOverride: modelTypeSchema.default('opus4.5'),
   enableLinkInPr: z.boolean().default(false),
   updatedAt: z.number().default(0),
 });
