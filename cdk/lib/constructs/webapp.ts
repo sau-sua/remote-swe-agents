@@ -129,6 +129,8 @@ export class Webapp extends Construct {
           ? {
               SLACK_ONLY_SESSION_CREATION: 'true',
               NEXT_PUBLIC_SLACK_ONLY_SESSION_CREATION: 'true',
+            }
+          : {}),
         ...(props.vapidKeys
           ? {
               VAPID_PUBLIC_KEY_PARAMETER_NAME: props.vapidKeys.publicKeyParameter.parameterName,

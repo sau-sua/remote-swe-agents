@@ -12,10 +12,7 @@ const createSessionSchema = z.object({
 
 export async function POST(request: NextRequest) {
   if (process.env.SLACK_ONLY_SESSION_CREATION === 'true') {
-    return NextResponse.json(
-      { error: 'Session creation is only allowed from Slack.' },
-      { status: 403 }
-    );
+    return NextResponse.json({ error: 'Session creation is only allowed from Slack.' }, { status: 403 });
   }
 
   // Validate API key

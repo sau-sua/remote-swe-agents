@@ -1,9 +1,5 @@
 import Anthropic from '@anthropic-ai/sdk';
-import {
-  ConverseCommandInput,
-  ConverseResponse,
-  ContentBlock,
-} from '@aws-sdk/client-bedrock-runtime';
+import { ConverseCommandInput, ConverseResponse, ContentBlock } from '@aws-sdk/client-bedrock-runtime';
 import { ddb, TableName } from './aws';
 import { GetCommand, PutCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
 import { modelConfigs, ModelType } from '../schema';
@@ -109,7 +105,11 @@ const convertToAnthropicFormat = (
                 type: 'image',
                 source: {
                   type: 'base64',
-                  media_type: (imageData.format || 'image/png') as 'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp',
+                  media_type: (imageData.format || 'image/png') as
+                    | 'image/jpeg'
+                    | 'image/png'
+                    | 'image/gif'
+                    | 'image/webp',
                   data: base64Data,
                 },
               });
@@ -141,7 +141,11 @@ const convertToAnthropicFormat = (
                     type: 'image',
                     source: {
                       type: 'base64',
-                      media_type: (rc.image.format || 'image/png') as 'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp',
+                      media_type: (rc.image.format || 'image/png') as
+                        | 'image/jpeg'
+                        | 'image/png'
+                        | 'image/gif'
+                        | 'image/webp',
                       data: base64Data,
                     },
                   });
@@ -204,7 +208,12 @@ const convertToAnthropicFormat = (
   if (input.toolConfig?.tools && input.toolConfig.tools.length > 0) {
     tools = [];
     for (const tool of input.toolConfig.tools) {
-      const spec = (tool as { toolSpec?: { name?: string; description?: string; inputSchema?: { json?: Record<string, unknown> } }; cachePoint?: { type?: string } }).toolSpec;
+      const spec = (
+        tool as {
+          toolSpec?: { name?: string; description?: string; inputSchema?: { json?: Record<string, unknown> } };
+          cachePoint?: { type?: string };
+        }
+      ).toolSpec;
       if (spec) {
         const base = spec.inputSchema?.json;
         const input_schema: Anthropic.Tool.InputSchema =
@@ -233,8 +242,12 @@ const convertToAnthropicFormat = (
   if (modelConfig.reasoningSupport) {
     const shouldEnableReasoning =
       !input.toolConfig?.toolChoice &&
-      !(input.messages?.at(-2)?.content?.at(0) && 'reasoningContent' in input.messages.at(-2)!.content!.at(0)! &&
-        input.messages?.at(-2)?.content?.at(-1) && 'toolUse' in input.messages.at(-2)!.content!.at(-1)!);
+      !(
+        input.messages?.at(-2)?.content?.at(0) &&
+        'reasoningContent' in input.messages.at(-2)!.content!.at(0)! &&
+        input.messages?.at(-2)?.content?.at(-1) &&
+        'toolUse' in input.messages.at(-2)!.content!.at(-1)!
+      );
 
     if (shouldEnableReasoning) {
       const enableUltraThink = shouldUltraThink(input);
@@ -281,9 +294,7 @@ const shouldUltraThink = (input: Omit<ConverseCommandInput, 'modelId'>): boolean
 };
 
 // Convert Anthropic response to Bedrock ConverseResponse format
-const convertFromAnthropicResponse = (
-  response: Anthropic.Message
-): ConverseResponse => {
+const convertFromAnthropicResponse = (response: Anthropic.Message): ConverseResponse => {
   const content: ContentBlock[] = [];
 
   for (const block of response.content) {
@@ -310,7 +321,12 @@ const convertFromAnthropicResponse = (
     }
   }
 
-  const usage = response.usage as { input_tokens: number; output_tokens: number; cache_read_input_tokens?: number; cache_creation_input_tokens?: number };
+  const usage = response.usage as {
+    input_tokens: number;
+    output_tokens: number;
+    cache_read_input_tokens?: number;
+    cache_creation_input_tokens?: number;
+  };
   const inputTokens = usage.input_tokens ?? 0;
   const outputTokens = usage.output_tokens ?? 0;
 
@@ -351,8 +367,10 @@ export const anthropicConverse = async (
   console.log(`Using Anthropic API with model: ${modelName}`);
 
   // Convert input format
-  const { messages, system, max_tokens, temperature, top_p, tools, thinking } =
-    convertToAnthropicFormat(input, modelType);
+  const { messages, system, max_tokens, temperature, top_p, tools, thinking } = convertToAnthropicFormat(
+    input,
+    modelType
+  );
 
   // Build request parameters
   const requestParams: Anthropic.MessageCreateParamsNonStreaming = {

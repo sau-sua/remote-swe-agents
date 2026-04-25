@@ -165,13 +165,7 @@ async function createWorkerInstance(
   const imageId = await fetchWorkerAmiId(workerAmiParameterName);
 
   const tryLaunch = async (useSpot: boolean) => {
-    const input = buildRunInstancesInput(
-      workerId,
-      launchTemplateId,
-      imageId,
-      subnetId,
-      useSpot
-    );
+    const input = buildRunInstancesInput(workerId, launchTemplateId, imageId, subnetId, useSpot);
     const response = await ec2.send(new RunInstancesCommand(input));
     if (response.Instances && response.Instances.length > 0 && response.Instances[0].InstanceId) {
       return response.Instances[0].InstanceId;

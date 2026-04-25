@@ -595,7 +595,6 @@ systemctl start myapp
       this.agentCoreRuntime = undefined;
     }
 
->>>>>>> upstream/main
     props.webappOriginSourceParameter.grantRead(role);
     role.addToPrincipalPolicy(
       new iam.PolicyStatement({

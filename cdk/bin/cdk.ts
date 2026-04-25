@@ -84,9 +84,7 @@ const props: MainStackProps = {
   initialWebappUserEmail: process.env.INITIAL_WEBAPP_USER_EMAIL,
   bedrockCriRegionOverride: process.env.BEDROCK_CRI_REGION_OVERRIDE,
   llmProvider: process.env.LLM_PROVIDER,
-  ...(process.env.ANTHROPIC_API_KEY
-    ? { anthropicApiKeyParameterName: '/remote-swe/anthropic/api-key' }
-    : {}),
+  ...(process.env.ANTHROPIC_API_KEY ? { anthropicApiKeyParameterName: '/remote-swe/anthropic/api-key' } : {}),
   // Set DEPLOY_BEDROCK_RUNTIME=true to deploy Bedrock Agent Core (subject to account limit). Default: use Claude via Anthropic only.
   deployBedrockRuntime: process.env.DEPLOY_BEDROCK_RUNTIME === 'true',
   workerInstanceType: process.env.WORKER_INSTANCE_TYPE,
