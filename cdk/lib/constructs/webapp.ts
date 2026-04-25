@@ -147,7 +147,7 @@ export class Webapp extends Construct {
     storage.bucket.grantReadWrite(handler);
     workerBus.api.grantPublish(handler);
     props.agentCoreRuntime?.grantInvoke(handler);
-    props.agentCoreRuntime.grantInvoke(handler);
+    props.agentCoreRuntime?.grantInvoke(handler);
     if (props.vapidKeys) {
       props.vapidKeys.grantRead(handler);
       handler.node.addDependency(props.vapidKeys.customResource);

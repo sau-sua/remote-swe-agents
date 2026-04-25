@@ -627,7 +627,7 @@ systemctl start myapp
     props.imageBucket.grantReadWrite(role);
     privateKey?.grantRead(role);
     props.githubPersonalAccessTokenParameter?.grantRead(role);
-    props.slackBotTokenParameter.grantRead(role);
+    props.slackBotTokenParameter?.grantRead(role);
     props.anthropicApiKeyParameter?.grantRead(role);
     props.slackBotTokenParameter?.grantRead(role);
     props.vapidKeys.grantRead(role);

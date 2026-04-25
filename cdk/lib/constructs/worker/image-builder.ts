@@ -149,7 +149,8 @@ export class WorkerImageBuilder extends Construct {
       },
       policy: AwsCustomResourcePolicy.fromStatements([
         new PolicyStatement({
-          actions: ['ssm:PutParameter'],
+          // PutParameter for cache bust; DeleteParameter can be invoked during rollback/replacement flows.
+          actions: ['ssm:PutParameter', 'ssm:DeleteParameter'],
           resources: [props.amiIdParameter.parameterArn],
         }),
       ]),
