@@ -252,6 +252,54 @@ cd packages/webapp && npm run build
 - **Always create PRs against the upstream repository**: When making changes, ensure that your Pull Requests are created against the original repository (`aws-samples/remote-swe-agents`), not your personal fork.
 - **Use descriptive PR titles**: PR titles and descriptions should clearly explain the changes and must be written in English.
 
+### PR Review Guidelines
+
+When reviewing Pull Requests using `gh pr-review` extension:
+
+**CRITICAL RESTRICTIONS:**
+- **NEVER use `--submit` flag**: Do NOT submit reviews automatically. Human reviewers must read and approve comments before submission.
+- **Always add review labels**: Every review comment MUST include a label prefix to clarify intent and required action.
+
+**Review Comment Labels (MANDATORY):**
+
+| Label | Meaning | Intent |
+|-------|---------|--------|
+| `Q` | Question | Requires response from author |
+| `FYI` | For Your Information | No action needed, informational only |
+| `NITS` | Nitpick | Minor suggestion, can be ignored |
+| `NR` | No Rush | Future improvement, consider for backlog |
+| `IMO` | In My Opinion | Personal suggestion, consider but not required |
+| `MUST` | Must Fix | Critical issue, must be resolved before approval |
+
+**Example Usage:**
+```bash
+# WRONG - Do NOT use --submit
+gh pr-review review --submit -R owner/repo 123 --review-id PRR_xxx --event APPROVE
+
+# CORRECT - Start review without submitting
+gh pr-review review --start -R owner/repo 123
+
+# CORRECT - Add comment with label
+gh pr-review review --add-comment -R owner/repo 123 \
+  --review-id PRR_xxx \
+  --path src/example.ts \
+  --line 42 \
+  --body "MUST: This function lacks error handling for null values"
+
+# CORRECT - Add another comment
+gh pr-review review --add-comment -R owner/repo 123 \
+  --review-id PRR_xxx \
+  --path src/utils.ts \
+  --line 15 \
+  --body "NITS: Consider using const instead of let here"
+```
+
+**Review Workflow:**
+1. Start a pending review: `gh pr-review review --start -R owner/repo PR_NUMBER`
+2. Add comments with labels: Use `--add-comment` with appropriate label prefix
+3. Human reviewer reads all comments
+4. Human submits review manually via GitHub UI or gh CLI
+
 ## Troubleshooting
 
 - **Build errors**: Check that dependencies are up to date (`npm ci` to update)

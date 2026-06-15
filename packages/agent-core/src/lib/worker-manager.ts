@@ -1,10 +1,20 @@
-import { DescribeInstancesCommand, RunInstancesCommand, StartInstancesCommand } from '@aws-sdk/client-ec2';
+import {
+  DescribeInstancesCommand,
+  RunInstancesCommand,
+  StartInstancesCommand,
+  StopInstancesCommand,
+  TerminateInstancesCommand,
+} from '@aws-sdk/client-ec2';
 import { GetParameterCommand, ParameterNotFound } from '@aws-sdk/client-ssm';
-import { BedrockAgentCoreClient, InvokeAgentRuntimeCommand } from '@aws-sdk/client-bedrock-agentcore';
+import {
+  BedrockAgentCoreClient,
+  InvokeAgentRuntimeCommand,
+  StopRuntimeSessionCommand,
+} from '@aws-sdk/client-bedrock-agentcore';
 import { ec2, ssm } from './aws';
 import { sendWebappEvent } from './events';
-import { updateSession } from './sessions';
-import { InstanceStatus } from '../schema';
+import { getSession, updateSession } from './sessions';
+import { InstanceStatus, RuntimeType } from '../schema';
 
 const agentCore = new BedrockAgentCoreClient();
 
@@ -101,6 +111,9 @@ async function fetchWorkerAmiId(workerAmiParameterName: string): Promise<string 
 
 const useSpotInstances = process.env.WORKER_USE_SPOT === 'true';
 
+/** Matches IAM ec2:ResourceTag for worker stop/terminate + event-trigger StartInstances */
+const remoteSweStackName = process.env.REMOTE_SWE_STACK_NAME?.trim() ?? '';
+
 function buildRunInstancesInput(
   workerId: string,
   launchTemplateId: string,
@@ -108,6 +121,16 @@ function buildRunInstancesInput(
   subnetId: string,
   useSpot: boolean
 ): RunInstancesCommand['input'] {
+  const instanceTags = [
+    {
+      Key: 'RemoteSweWorkerId',
+      Value: workerId,
+    },
+    ...(remoteSweStackName
+      ? [{ Key: 'RemoteSweStackName' as const, Value: remoteSweStackName }]
+      : []),
+  ];
+
   return {
     LaunchTemplate: {
       LaunchTemplateId: launchTemplateId,
@@ -128,12 +151,7 @@ function buildRunInstancesInput(
     TagSpecifications: [
       {
         ResourceType: 'instance',
-        Tags: [
-          {
-            Key: 'RemoteSweWorkerId',
-            Value: workerId,
-          },
-        ],
+        Tags: instanceTags,
       },
     ],
     ...(useSpot && {
@@ -156,13 +174,7 @@ async function createWorkerInstance(
   const imageId = await fetchWorkerAmiId(workerAmiParameterName);
 
   const tryLaunch = async (useSpot: boolean) => {
-    const input = buildRunInstancesInput(
-      workerId,
-      launchTemplateId,
-      imageId,
-      subnetId,
-      useSpot
-    );
+    const input = buildRunInstancesInput(workerId, launchTemplateId, imageId, subnetId, useSpot);
     const response = await ec2.send(new RunInstancesCommand(input));
     if (response.Instances && response.Instances.length > 0 && response.Instances[0].InstanceId) {
       return response.Instances[0].InstanceId;
@@ -202,15 +214,26 @@ export async function getOrCreateWorkerInstance(
   workerType: 'agent-core' | 'ec2' = 'ec2'
 ): Promise<{ instanceId: string; oldStatus: 'stopped' | 'terminated' | 'running'; usedCache?: boolean }> {
   if (workerType == 'agent-core') {
+    // Only set 'starting' if the session is not already running
+    const session = await getSession(workerId);
+    const currentInstanceStatus = session?.instanceStatus;
+    if (currentInstanceStatus !== 'running') {
+      await updateInstanceStatus(workerId, 'starting');
+    }
+    const agentRuntimeArn = process.env.AGENT_RUNTIME_ARN!;
     const res = await agentCore.send(
       new InvokeAgentRuntimeCommand({
-        agentRuntimeArn: process.env.AGENT_RUNTIME_ARN,
+        agentRuntimeArn,
         runtimeSessionId: workerId,
-        payload: JSON.stringify({ sessionId: workerId }),
+        payload: JSON.stringify({ sessionId: workerId, agentRuntimeArn }),
         contentType: 'application/json',
       })
     );
-    return { instanceId: 'local', oldStatus: 'running' };
+    // Update to 'running' after successful invocation
+    // (also done in the container, but doing it here ensures it works
+    // even with older container images)
+    await updateInstanceStatus(workerId, 'running');
+    return { instanceId: 'local', oldStatus: currentInstanceStatus === 'running' ? 'running' : 'stopped' };
   }
 
   // First, check if an instance with this workerId is already running
@@ -238,4 +261,56 @@ export async function getOrCreateWorkerInstance(
     subnetId
   );
   return { instanceId, oldStatus: 'terminated', usedCache };
+}
+
+/**
+ * Stop a worker instance (EC2 or agent-core runtime session)
+ * @param workerId Worker ID of the session to stop
+ * @param runtimeType The runtime type ('ec2' or 'agent-core')
+ */
+export async function stopWorkerInstance(workerId: string, runtimeType: RuntimeType = 'agent-core'): Promise<void> {
+  if (runtimeType === 'agent-core') {
+    const agentRuntimeArn = process.env.AGENT_RUNTIME_ARN;
+    if (!agentRuntimeArn) {
+      console.error('Cannot stop agent-core session: missing AGENT_RUNTIME_ARN');
+      return;
+    }
+    try {
+      await agentCore.send(
+        new StopRuntimeSessionCommand({
+          agentRuntimeArn,
+          runtimeSessionId: workerId,
+          qualifier: 'DEFAULT',
+        })
+      );
+      console.log(`Stopped agent-core runtime session: ${workerId}`);
+    } catch (error) {
+      console.error('Error stopping agent-core runtime session:', error);
+      return;
+    }
+  } else {
+    const instanceId = await findWorkerInstanceWithStatus(workerId, ['running', 'pending']);
+    if (instanceId) {
+      try {
+        const desc = await ec2.send(
+          new DescribeInstancesCommand({
+            InstanceIds: [instanceId],
+          })
+        );
+        const inst = desc.Reservations?.[0]?.Instances?.[0];
+        const isSpot = inst?.InstanceLifecycle === 'spot';
+        if (isSpot) {
+          await ec2.send(new TerminateInstancesCommand({ InstanceIds: [instanceId] }));
+          console.log(`Terminated spot EC2 instance: ${instanceId}`);
+        } else {
+          await ec2.send(new StopInstancesCommand({ InstanceIds: [instanceId] }));
+          console.log(`Stopped EC2 instance: ${instanceId}`);
+        }
+      } catch (error) {
+        console.error('Error stopping or terminating EC2 instance:', error);
+        return;
+      }
+    }
+  }
+  await updateInstanceStatus(workerId, 'stopped');
 }

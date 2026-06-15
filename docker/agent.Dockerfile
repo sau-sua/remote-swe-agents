@@ -1,7 +1,6 @@
 FROM public.ecr.aws/ubuntu/ubuntu:noble
 
-RUN apt-get update && apt-get install -y
-RUN apt-get install -y curl wget
+RUN apt-get update && apt-get install -y --no-install-recommends curl wget ca-certificates
 
 RUN curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.2/install.sh | bash
 ENV NODE_VERSION=22.18.0

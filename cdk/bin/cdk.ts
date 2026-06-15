@@ -42,6 +42,13 @@ if (process.env.BEDROCK_CRI_REGION_OVERRIDE) {
 }
 
 const additionalPolicies = parseCommaSeparatedList(process.env.WORKER_ADDITIONAL_POLICIES);
+const slackBotTokenParameterName = process.env.SLACK_BOT_TOKEN_PARAMETER_NAME ?? '/remote-swe/slack/bot-token';
+const slackSigningSecretParameterName =
+  process.env.SLACK_SIGNING_SECRET_PARAMETER_NAME ?? '/remote-swe/slack/signing-secret';
+const githubPatParameterName =
+  process.env.GITHUB_PERSONAL_ACCESS_TOKEN_PARAMETER_NAME ?? '/remote-swe/github/personal-access-token';
+const slackEnabled = process.env.SLACK_ENABLED !== 'false';
+const hasGitHubAppConfig = !!(process.env.GITHUB_APP_ID && process.env.GITHUB_INSTALLATION_ID);
 
 const props: MainStackProps = {
   env: {
@@ -51,23 +58,44 @@ const props: MainStackProps = {
   crossRegionReferences: true,
   signPayloadHandler: virginia.signPayloadHandler,
   cloudFrontWebAclArn: virginia.webAclArn,
-  workerAmiIdParameterName: '/remote-swe/worker/ami-id',
-  slack: {
-    botTokenParameterName: '/remote-swe/slack/bot-token',
-    signingSecretParameterName: '/remote-swe/slack/signing-secret',
-    adminUserIdList: process.env.SLACK_ADMIN_USER_ID_LIST,
-  },
-  github: {
-    ...(process.env.GITHUB_APP_ID
-      ? {
-          privateKeyParameterName: '/remote-swe/github/app-private-key',
+
+  // === Slack Integration (optional) ===
+  // Enabled by default. Set SLACK_ENABLED=false to disable.
+  ...(slackEnabled
+    ? {
+        slack: {
+          botTokenParameterName: slackBotTokenParameterName,
+          signingSecretParameterName: slackSigningSecretParameterName,
+          ...(process.env.SLACK_ADMIN_USER_ID_LIST ? { adminUserIdList: process.env.SLACK_ADMIN_USER_ID_LIST } : {}),
+        },
+      }
+    : {}),
+  ...(hasGitHubAppConfig
+    ? {
+        github: {
           appId: process.env.GITHUB_APP_ID!,
           installationId: process.env.GITHUB_INSTALLATION_ID!,
-        }
-      : {
-          personalAccessTokenParameterName: '/remote-swe/github/personal-access-token',
-        }),
-  },
+          privateKeyParameterName: process.env.GITHUB_APP_PRIVATE_KEY_PARAMETER_NAME ?? '/remote-swe/github/app-private-key',
+        },
+      }
+    : {
+        github: {
+          personalAccessTokenParameterName: githubPatParameterName,
+        },
+      }),
+
+  // === GitHub Integration (optional) ===
+  // Option A: GitHub App
+  // github: {
+  //   privateKeyParameterName: `/remote-swe/${targetEnv}/github/app-private-key`,
+  //   appId: process.env.GITHUB_APP_ID!,
+  //   installationId: process.env.GITHUB_INSTALLATION_ID!,
+  // },
+  // Option B: Personal Access Token
+  // github: {
+  //   personalAccessTokenParameterName: `/remote-swe/${targetEnv}/github/personal-access-token`,
+  // },
+
   ...(process.env.AWS_ACCOUNT_ID_LIST_FOR_LB
     ? {
         loadBalancing: {
@@ -81,9 +109,7 @@ const props: MainStackProps = {
   initialWebappUserEmail: process.env.INITIAL_WEBAPP_USER_EMAIL,
   bedrockCriRegionOverride: process.env.BEDROCK_CRI_REGION_OVERRIDE,
   llmProvider: process.env.LLM_PROVIDER,
-  ...(process.env.ANTHROPIC_API_KEY
-    ? { anthropicApiKeyParameterName: '/remote-swe/anthropic/api-key' }
-    : {}),
+  ...(process.env.ANTHROPIC_API_KEY ? { anthropicApiKeyParameterName: '/remote-swe/anthropic/api-key' } : {}),
   // Set DEPLOY_BEDROCK_RUNTIME=true to deploy Bedrock Agent Core (subject to account limit). Default: use Claude via Anthropic only.
   deployBedrockRuntime: process.env.DEPLOY_BEDROCK_RUNTIME === 'true',
   workerInstanceType: process.env.WORKER_INSTANCE_TYPE,

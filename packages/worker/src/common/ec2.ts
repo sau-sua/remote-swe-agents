@@ -1,26 +1,70 @@
 import { ec2 } from '@remote-swe-agents/agent-core/aws';
 import { StopInstancesCommand, TerminateInstancesCommand } from '@aws-sdk/client-ec2';
+import { BedrockAgentCoreClient, StopRuntimeSessionCommand } from '@aws-sdk/client-bedrock-agentcore';
 
 const workerRuntime = process.env.WORKER_RUNTIME ?? 'ec2';
 
-export const stopMyself = async () => {
-  if (workerRuntime !== 'ec2') return;
-  const instanceId = await getInstanceId();
-  await ec2.send(
-    new StopInstancesCommand({
-      InstanceIds: [instanceId],
-    })
-  );
+const agentCoreClient = () =>
+  new BedrockAgentCoreClient({
+    region: process.env.AWS_REGION ?? process.env.AWS_DEFAULT_REGION,
+  });
+
+/**
+ * Stops this worker session (Agent Core) or EC2 instance.
+ * @returns true if the stop API completed successfully
+ */
+export const stopMyself = async (workerId?: string): Promise<boolean> => {
+  if (workerRuntime === 'agent-core') {
+    const arn = process.env.AGENT_RUNTIME_ARN;
+    if (!arn || !workerId) {
+      console.error('Cannot stop agent-core session: missing AGENT_RUNTIME_ARN or workerId');
+      return false;
+    }
+    try {
+      const agentCore = agentCoreClient();
+      await agentCore.send(
+        new StopRuntimeSessionCommand({
+          agentRuntimeArn: arn,
+          runtimeSessionId: workerId,
+          qualifier: 'DEFAULT',
+        })
+      );
+      console.log(`Stopped agent-core runtime session: ${workerId}`);
+      return true;
+    } catch (error) {
+      console.error('Error stopping agent-core runtime session:', error);
+      return false;
+    }
+  }
+
+  try {
+    const instanceId = await getInstanceId();
+    await ec2.send(
+      new StopInstancesCommand({
+        InstanceIds: [instanceId],
+      })
+    );
+    return true;
+  } catch (error) {
+    console.error('Error stopping EC2 instance:', error);
+    return false;
+  }
 };
 
-export const terminateMyself = async () => {
-  if (workerRuntime !== 'ec2') return;
-  const instanceId = await getInstanceId();
-  await ec2.send(
-    new TerminateInstancesCommand({
-      InstanceIds: [instanceId],
-    })
-  );
+export const terminateMyself = async (): Promise<boolean> => {
+  if (workerRuntime !== 'ec2') return false;
+  try {
+    const instanceId = await getInstanceId();
+    await ec2.send(
+      new TerminateInstancesCommand({
+        InstanceIds: [instanceId],
+      })
+    );
+    return true;
+  } catch (error) {
+    console.error('Error terminating EC2 instance:', error);
+    return false;
+  }
 };
 
 const getInstanceId = async () => {
