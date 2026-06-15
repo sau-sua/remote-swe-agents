@@ -1,4 +1,5 @@
 import { sendSystemMessage, updateInstanceStatus } from '@remote-swe-agents/agent-core/lib';
+import { refreshSession } from './refresh-session';
 import { stopMyself, terminateMyself, getInstanceLifecycle } from './ec2';
 import { randomBytes } from 'crypto';
 
@@ -42,32 +43,62 @@ export const setKillTimer = (workerId: string) => {
   }
   killTimer = setTimeout(
     async () => {
+      await refreshSession(workerId);
+
+      const isEc2 = workerRuntime === 'ec2';
       let isSpot = false;
-      try {
-        // await sendSystemMessage(workerId, 'Going to sleep mode. You can wake me up at any time.');
+      if (isEc2) {
         try {
           isSpot = (await getInstanceLifecycle()) === 'spot';
         } catch {
           isSpot = true;
         }
+      }
+
+      try {
         await updateInstanceStatus(workerId, isSpot ? 'terminated' : 'stopped');
       } catch (e) {
-        console.error('Kill timer: error before stop:', e);
-      } finally {
-        try {
-          if (isSpot) {
-            await terminateMyself();
-          } else {
-            await stopMyself();
-          }
-        } catch (e) {
-          console.error('Kill timer: stop/terminate failed:', e);
-        }
+        console.error('Kill timer: error updating instance status before stop:', e);
       }
-      await sendSystemMessage(workerId, 'Going to sleep mode. You can wake me up at any time.');
-      // Update instance status to stopped in DynamoDB before stopping the instance
-      await updateInstanceStatus(workerId, 'stopped');
-      await stopMyself(workerId);
+
+      let stopped = false;
+      try {
+        if (isAgentCore) {
+          stopped = await stopMyself(workerId);
+        } else if (isSpot) {
+          stopped = await terminateMyself();
+        } else {
+          stopped = await stopMyself();
+        }
+      } catch (e) {
+        console.error('Kill timer: stop/terminate failed:', e);
+      }
+
+      if (!stopped) {
+        console.error(
+          'Kill timer: stop/terminate did not succeed (check AGENT_RUNTIME_ARN, IAM, or EC2 metadata); notifying user and rescheduling timer'
+        );
+        try {
+          await sendSystemMessage(
+            workerId,
+            'Idle timeout reached but automatic shutdown failed. Please stop the session from the Web UI, or send a message to continue.'
+          );
+        } catch (e) {
+          console.error('Kill timer: sendSystemMessage (shutdown failure notice) failed:', e);
+        }
+        setKillTimer(workerId);
+        return;
+      }
+
+      try {
+        await sendSystemMessage(workerId, 'Going to sleep mode. You can wake me up at any time.');
+      } catch (e) {
+        console.error('Kill timer: sendSystemMessage failed:', e);
+      }
+
+      if (isAgentCore) {
+        process.exit(0);
+      }
     },
     15 * 60 * 1000
   );

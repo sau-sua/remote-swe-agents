@@ -114,7 +114,7 @@ export class EventTrigger extends Construct {
           resources: [`arn:aws:ec2:${region}:${account}:instance/*`],
           conditions: {
             StringEquals: {
-              'ec2:ResourceTag/aws:cloudformation:stack-name': cdk.Stack.of(this).stackName,
+              'ec2:ResourceTag/RemoteSweStackName': cdk.Stack.of(this).stackName,
             },
           },
         })

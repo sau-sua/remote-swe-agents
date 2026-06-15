@@ -29,7 +29,9 @@ export class AsyncJob extends Construct {
     });
 
     const handler = new DockerImageFunction(this, 'Handler', {
-      code: image.toLambdaDockerImageCode({ cmd: ['async-handler.handler'] }),
+      // Keep CMD from docker/job.Dockerfile ("async-job-runner.handler").
+      // Overriding it here can break Lambda startup when the symbol doesn't exist in the image.
+      code: image.toLambdaDockerImageCode(),
       memorySize: 256,
       timeout: Duration.minutes(10),
       architecture: Architecture.ARM_64,

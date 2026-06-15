@@ -1,6 +1,7 @@
-import { Arn, ArnFormat, CfnOutput, Names, Stack } from 'aws-cdk-lib';
+import { Arn, ArnFormat, CfnOutput, CfnResource, Names, RemovalPolicy, Stack } from 'aws-cdk-lib';
 import { CfnRuntime } from 'aws-cdk-lib/aws-bedrockagentcore';
 import { ITableV2 } from 'aws-cdk-lib/aws-dynamodb';
+import { Repository } from 'aws-cdk-lib/aws-ecr';
 import { Platform } from 'aws-cdk-lib/aws-ecr-assets';
 import { ContainerImageBuild } from '@cdklabs/deploy-time-build';
 import { IGrantable, IPrincipal, ManagedPolicy, PolicyStatement, Role, ServicePrincipal } from 'aws-cdk-lib/aws-iam';
@@ -12,6 +13,23 @@ import { join } from 'path';
 import { WorkerBus } from './bus';
 import { VapidKeys } from '../vapid-keys';
 import { EventTrigger } from './event-trigger';
+
+/**
+ * Bedrock {@link CfnRuntime} validates ContainerUri with a strict pattern: the ECR repository path
+ * must be lowercase and cannot contain consecutive separators (e.g. `--`), which
+ * `Names.uniqueResourceName` can produce when the stack id ends with a hyphen (`RemoteSweStack-`).
+ */
+function ecrRepositoryNameForAgentCore(construct: Construct): string {
+  let name = Names.uniqueResourceName(construct, { maxLength: 250, separator: '-' })
+    .toLowerCase()
+    .replace(/[^a-z0-9/_-]/g, '-');
+  name = name.replace(/-+/g, '-').replace(/\/+/g, '/');
+  name = name.replace(/^[-/.]+|[-/.]+$/g, '');
+  if (name.length < 2) {
+    name = 'agentcore-worker';
+  }
+  return name.slice(0, 200);
+}
 
 export interface AgentCoreRuntimeProps {
   storageTable: ITableV2;
@@ -65,11 +83,20 @@ export class AgentCoreRuntime extends Construct implements IGrantable {
       });
     }
 
+    const repository = new Repository(this, 'WorkerImageRepository', {
+      repositoryName: ecrRepositoryNameForAgentCore(this),
+      removalPolicy: RemovalPolicy.DESTROY,
+    });
+    const cfnRepository = repository.node.defaultChild as CfnResource;
+    cfnRepository.addPropertyOverride('EmptyOnDelete', true);
+    cfnRepository.addPropertyOverride('ImageScanningConfiguration.ScanOnPush', true);
+
     const image = new ContainerImageBuild(this, 'WorkerImage', {
       directory: '..',
       file: join('docker', 'agent.Dockerfile'),
       exclude: readFileSync('.dockerignore').toString().split('\n'),
       platform: Platform.LINUX_ARM64,
+      repository,
     });
     image.repository.grantPull(role);
 
@@ -179,7 +206,7 @@ export class AgentCoreRuntime extends Construct implements IGrantable {
   public grantInvoke(grantee: IGrantable) {
     grantee.grantPrincipal.addToPrincipalPolicy(
       new PolicyStatement({
-        actions: ['bedrock-agentcore:InvokeAgentRuntime'],
+        actions: ['bedrock-agentcore:InvokeAgentRuntime', 'bedrock-agentcore:StopRuntimeSession'],
         resources: [this.runtimeArn, `${this.runtimeArn}/runtime-endpoint/DEFAULT`],
       })
     );

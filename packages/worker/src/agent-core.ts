@@ -15,9 +15,10 @@ app.post('/invocations', async (req, res) => {
   console.log(body);
   const sessionId = body.sessionId;
 
-  // Store the agent runtime ARN passed from the invoker for later use (e.g. StopRuntimeSession)
-  if (body.agentRuntimeArn) {
-    process.env.AGENT_RUNTIME_ARN = body.agentRuntimeArn;
+  // Store the agent runtime ARN for StopRuntimeSession (must be set before main(); do not snapshot at module load).
+  const arnFromBody = body.agentRuntimeArn;
+  if (arnFromBody != null && String(arnFromBody).trim() !== '') {
+    process.env.AGENT_RUNTIME_ARN = String(arnFromBody).trim();
   }
 
   const tracker = await main(sessionId);

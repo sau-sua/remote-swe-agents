@@ -27,7 +27,7 @@ export interface SlackBoltProps {
   webappOriginNameParameter: IStringParameter;
   /** Use Spot instances for workers. Set WORKER_USE_SPOT in Lambda environment. */
   workerUseSpot?: boolean;
-  agentCoreRuntime: AgentCoreRuntime;
+  agentCoreRuntime?: AgentCoreRuntime;
 }
 
 export class SlackBolt extends Construct {
@@ -54,8 +54,9 @@ export class SlackBolt extends Construct {
         EVENT_HTTP_ENDPOINT: props.workerBus.httpEndpoint,
         TABLE_NAME: props.storage.table.tableName,
         BUCKET_NAME: props.storage.bucket.bucketName,
+        REMOTE_SWE_STACK_NAME: Stack.of(this).stackName,
         ...(props.workerUseSpot ? { WORKER_USE_SPOT: 'true' } : {}),
-        AGENT_RUNTIME_ARN: props.agentCoreRuntime.runtimeArn,
+        AGENT_RUNTIME_ARN: props.agentCoreRuntime?.runtimeArn ?? '',
       },
       architecture: Architecture.ARM_64,
     });
@@ -63,7 +64,7 @@ export class SlackBolt extends Construct {
     props.storage.table.grantReadWriteData(asyncHandler);
     props.storage.bucket.grantReadWrite(asyncHandler);
     props.workerBus.api.grantPublish(asyncHandler);
-    props.agentCoreRuntime.grantInvoke(asyncHandler);
+    props.agentCoreRuntime?.grantInvoke(asyncHandler);
 
     const handler = new DockerImageFunction(this, 'Handler', {
       code: slackImage.toLambdaDockerImageCode(),

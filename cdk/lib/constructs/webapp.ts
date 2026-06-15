@@ -123,6 +123,7 @@ export class Webapp extends Construct {
         BUCKET_NAME: storage.bucket.bucketName,
         AGENT_RUNTIME_ARN: props.agentCoreRuntime?.runtimeArn ?? '',
         BEDROCK_CRI_REGION_OVERRIDE: props.bedrockCriRegionOverride ?? '',
+        REMOTE_SWE_STACK_NAME: Stack.of(this).stackName,
         ...(props.workerUseSpot ? { WORKER_USE_SPOT: 'true' } : {}),
         ...(props.workerTerminateOnSessionEnd ? { WORKER_TERMINATE_ON_SESSION_END: 'true' } : {}),
         ...(props.slackOnlySessionCreation
@@ -147,7 +148,6 @@ export class Webapp extends Construct {
     storage.bucket.grantReadWrite(handler);
     workerBus.api.grantPublish(handler);
     props.agentCoreRuntime?.grantInvoke(handler);
-    props.agentCoreRuntime?.grantInvoke(handler);
     if (props.vapidKeys) {
       props.vapidKeys.grantRead(handler);
       handler.node.addDependency(props.vapidKeys.customResource);
@@ -162,6 +162,8 @@ export class Webapp extends Construct {
           'iam:PassRole',
           'ec2:CreateTags',
           'ec2:StartInstances',
+          'ec2:StopInstances',
+          'ec2:TerminateInstances',
         ],
         resources: ['*'],
       })

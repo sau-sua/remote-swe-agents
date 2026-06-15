@@ -142,10 +142,12 @@ const isStarted: { [key: string]: boolean } = {};
 export const main = async (workerId: string) => {
   if (isStarted[workerId]) {
     console.log(`The worker ${workerId} is already started.`);
+    await refreshSession(workerId);
     return;
   }
 
   isStarted[workerId] = true;
+  await refreshSession(workerId);
   const tracker = new ConverseSessionTracker(workerId);
 
   const broadcast = await events.connect('/event-bus/broadcast');
