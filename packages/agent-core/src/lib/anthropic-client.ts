@@ -7,34 +7,81 @@ import { getParameter } from './aws/ssm';
 
 const ULTRA_THINKING_KEYWORD = 'ultrathink';
 
-// Cache for API key to avoid repeated SSM calls
-let cachedApiKey: string | undefined;
+// Beta header required when authenticating with a Claude subscription OAuth token.
+const OAUTH_BETA_HEADER = 'oauth-2025-04-20';
+// OAuth (Claude subscription) tokens are only accepted when the request identifies
+// itself as Claude Code via the leading system prompt block.
+const CLAUDE_CODE_SYSTEM_PROMPT = "You are Claude Code, Anthropic's official CLI for Claude.";
 
-// Initialize Anthropic client
-const getAnthropicClient = async () => {
-  if (cachedApiKey) {
-    return new Anthropic({ apiKey: cachedApiKey });
+// Cache the resolved Anthropic client to avoid repeated SSM calls.
+let cachedClient: { client: Anthropic; isOAuth: boolean } | undefined;
+
+// Resolve a credential either directly from an environment variable or, when only a
+// parameter name is provided, from SSM Parameter Store.
+const resolveCredential = async (envVar?: string, parameterName?: string): Promise<string | undefined> => {
+  if (envVar) {
+    return envVar;
+  }
+  if (parameterName) {
+    return getParameter(parameterName);
+  }
+  return undefined;
+};
+
+// Initialize Anthropic client. Supports two authentication methods:
+//   1. API key  (ANTHROPIC_API_KEY / ANTHROPIC_API_KEY_PARAMETER_NAME) -> x-api-key header
+//   2. OAuth token, e.g. from `claude setup-token`
+//      (ANTHROPIC_AUTH_TOKEN / CLAUDE_CODE_OAUTH_TOKEN / ANTHROPIC_AUTH_TOKEN_PARAMETER_NAME)
+//      -> Authorization: Bearer header + oauth beta header
+// When both are configured, the OAuth token takes precedence.
+const getAnthropicClient = async (): Promise<{ client: Anthropic; isOAuth: boolean }> => {
+  if (cachedClient) {
+    return cachedClient;
   }
 
-  // First, check if API key is directly provided as environment variable
-  let apiKey = process.env.ANTHROPIC_API_KEY;
-
-  // If not, fetch from SSM Parameter Store
-  if (!apiKey) {
-    const parameterName = process.env.ANTHROPIC_API_KEY_PARAMETER_NAME;
-    if (parameterName) {
-      apiKey = await getParameter(parameterName);
-    }
+  // OAuth token (Claude subscription) takes precedence when provided.
+  const authToken = await resolveCredential(
+    process.env.ANTHROPIC_AUTH_TOKEN || process.env.CLAUDE_CODE_OAUTH_TOKEN,
+    process.env.ANTHROPIC_AUTH_TOKEN_PARAMETER_NAME
+  );
+  if (authToken) {
+    cachedClient = {
+      client: new Anthropic({
+        apiKey: null,
+        authToken,
+        defaultHeaders: { 'anthropic-beta': OAUTH_BETA_HEADER },
+      }),
+      isOAuth: true,
+    };
+    return cachedClient;
   }
 
-  if (!apiKey) {
-    throw new Error(
-      'Anthropic API key not found. Set ANTHROPIC_API_KEY environment variable or ANTHROPIC_API_KEY_PARAMETER_NAME to fetch from SSM'
-    );
+  // Fall back to a standard API key.
+  const apiKey = await resolveCredential(process.env.ANTHROPIC_API_KEY, process.env.ANTHROPIC_API_KEY_PARAMETER_NAME);
+  if (apiKey) {
+    cachedClient = { client: new Anthropic({ apiKey }), isOAuth: false };
+    return cachedClient;
   }
 
-  cachedApiKey = apiKey;
-  return new Anthropic({ apiKey });
+  throw new Error(
+    'Anthropic credentials not found. Set an API key (ANTHROPIC_API_KEY / ANTHROPIC_API_KEY_PARAMETER_NAME) ' +
+      'or an OAuth token (ANTHROPIC_AUTH_TOKEN / CLAUDE_CODE_OAUTH_TOKEN / ANTHROPIC_AUTH_TOKEN_PARAMETER_NAME).'
+  );
+};
+
+// Ensure the Claude Code identity prompt is the first system block. Required for OAuth
+// (Claude subscription) tokens. Any existing system prompt is preserved after it.
+const prependClaudeCodeSystemPrompt = (
+  system: string | Anthropic.TextBlockParam[] | undefined
+): Anthropic.TextBlockParam[] => {
+  const claudeCodeBlock: Anthropic.TextBlockParam = { type: 'text', text: CLAUDE_CODE_SYSTEM_PROMPT };
+  if (!system) {
+    return [claudeCodeBlock];
+  }
+  if (typeof system === 'string') {
+    return [claudeCodeBlock, { type: 'text', text: system }];
+  }
+  return [claudeCodeBlock, ...system];
 };
 
 // Convert Bedrock model type to Anthropic model name
@@ -57,12 +104,23 @@ const modelTypeToAnthropicModel = (modelType: ModelType): string => {
   };
 
   const anthropicModel = modelMapping[baseModelId];
-  if (!anthropicModel) {
-    console.warn(`Unknown model type ${modelType}, using default claude-sonnet-4-5-20250929`);
-    return 'claude-sonnet-4-5-20250929';
+  if (anthropicModel) {
+    return anthropicModel;
   }
 
-  return anthropicModel;
+  // Generic fallback for models not in the explicit map (e.g. newer Bedrock model IDs
+  // such as `anthropic.claude-opus-5` or `anthropic.claude-opus-4-6-v1`).
+  // Strip the `anthropic.` vendor prefix and any trailing Bedrock version suffix
+  // (`-v1`, `-v1:0`, ...) to derive the Anthropic API model name.
+  if (baseModelId.startsWith('anthropic.')) {
+    const derived = baseModelId.replace(/^anthropic\./, '').replace(/-v\d+(?::\d+)?$/, '');
+    if (derived) {
+      return derived;
+    }
+  }
+
+  console.warn(`Unknown model type ${modelType}, using default claude-sonnet-4-5-20250929`);
+  return 'claude-sonnet-4-5-20250929';
 };
 
 // Convert Bedrock ConverseCommandInput to Anthropic Messages API format
@@ -360,11 +418,11 @@ export const anthropicConverse = async (
     throw new Error(`Max tokens exceeded too many times (${maxTokensExceededCount})`);
   }
 
-  const client = await getAnthropicClient();
+  const { client, isOAuth } = await getAnthropicClient();
   const modelType = modelTypes[Math.floor(Math.random() * modelTypes.length)];
   const modelName = modelTypeToAnthropicModel(modelType);
 
-  console.log(`Using Anthropic API with model: ${modelName}`);
+  console.log(`Using Anthropic API with model: ${modelName} (auth: ${isOAuth ? 'oauth' : 'api-key'})`);
 
   // Convert input format
   const { messages, system, max_tokens, temperature, top_p, tools, thinking } = convertToAnthropicFormat(
@@ -372,12 +430,16 @@ export const anthropicConverse = async (
     modelType
   );
 
+  // OAuth (Claude subscription) tokens require the request to identify as Claude Code
+  // via the leading system prompt block; otherwise the API rejects the credential.
+  const finalSystem = isOAuth ? prependClaudeCodeSystemPrompt(system) : system;
+
   // Build request parameters
   const requestParams: Anthropic.MessageCreateParamsNonStreaming = {
     model: modelName,
     messages,
     max_tokens,
-    ...(system && { system }),
+    ...(finalSystem && { system: finalSystem }),
     ...(temperature !== undefined && { temperature }),
     ...(top_p !== undefined && { top_p }),
     ...(tools && tools.length > 0 && { tools }),

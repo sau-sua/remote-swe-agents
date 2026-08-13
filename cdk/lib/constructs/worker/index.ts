@@ -43,6 +43,10 @@ export interface WorkerProps {
   llmProvider?: string;
   anthropicApiKeyParameter?: IStringParameter;
   /**
+   * Anthropic OAuth token (e.g. from `claude setup-token`). Alternative to an API key when llmProvider is 'anthropic'.
+   */
+  anthropicAuthTokenParameter?: IStringParameter;
+  /**
    * Deploy Bedrock Agent Core Runtime. Set to false to use Claude via Anthropic API only (avoids AWS Bedrock agent limit).
    * @default false
    */
@@ -113,28 +117,6 @@ export class Worker extends Construct {
       cognitoDomainName: props.cognitoDomainName,
     });
     this.eventTrigger = eventTrigger;
-
-    const agentCoreRuntime = new AgentCoreRuntime(this, 'AgentCore', {
-      storageTable: props.storageTable,
-      imageBucket: props.imageBucket,
-      bus: bus,
-      slackBotTokenParameter: props.slackBotTokenParameter,
-      gitHubApp: props.gitHubApp,
-      gitHubAppPrivateKeyParameter: privateKey,
-      githubPersonalAccessTokenParameter: props.githubPersonalAccessTokenParameter,
-      loadBalancing: props.loadBalancing,
-      accessLogBucket: props.accessLogBucket,
-      amiIdParameterName: props.amiIdParameterName,
-      webappOriginSourceParameter: props.webappOriginSourceParameter,
-      bedrockCriRegionOverride: props.bedrockCriRegionOverride,
-      additionalManagedPolicies: props.additionalManagedPolicies,
-      vapidKeys: props.vapidKeys,
-      eventTrigger,
-    });
-    this.agentCoreRuntime = agentCoreRuntime;
-
-    // Grant event trigger management to AgentCore role
-    eventTrigger.grantManage(agentCoreRuntime);
 
     const assetProps: AssetProps = {
       // we set dummy directory here because all the files are included in the build image.
@@ -417,6 +399,11 @@ export ANTHROPIC_API_KEY=${
           ? `$(aws ssm get-parameter --name ${props.anthropicApiKeyParameter.parameterName} --region ${Stack.of(this).region} --query \"Parameter.Value\" --output text)`
           : '""'
       }
+export ANTHROPIC_AUTH_TOKEN=${
+        props.anthropicAuthTokenParameter
+          ? `$(aws ssm get-parameter --name ${props.anthropicAuthTokenParameter.parameterName} --region ${Stack.of(this).region} --query \"Parameter.Value\" --output text)`
+          : '""'
+      }
 export GITHUB_PERSONAL_ACCESS_TOKEN=${
         props.githubPersonalAccessTokenParameter
           ? `$(aws ssm get-parameter --name ${props.githubPersonalAccessTokenParameter.parameterName} --region ${Stack.of(this).region} --query \"Parameter.Value\" --output text 2>/dev/null || echo "")`
@@ -476,6 +463,7 @@ Environment=BEDROCK_AWS_ROLE_NAME=${props.loadBalancing?.roleName ?? ''}
 Environment=BEDROCK_CRI_REGION_OVERRIDE=${props.bedrockCriRegionOverride ?? ''}
 Environment=LLM_PROVIDER=${props.llmProvider ?? 'bedrock'}
 Environment=ANTHROPIC_API_KEY_PARAMETER_NAME=${props.anthropicApiKeyParameter?.parameterName ?? ''}
+Environment=ANTHROPIC_AUTH_TOKEN_PARAMETER_NAME=${props.anthropicAuthTokenParameter?.parameterName ?? ''}
 Environment=VAPID_PUBLIC_KEY_PARAMETER_NAME=${props.vapidKeys.publicKeyParameter.parameterName}
 Environment=VAPID_PRIVATE_KEY_PARAMETER_NAME=${props.vapidKeys.privateKeyParameter.parameterName}
 Environment=EVENT_TRIGGER_SFN_ARN=${eventTrigger.handlerStateMachine.stateMachineArn}
@@ -590,8 +578,17 @@ systemctl start myapp
         amiIdParameterName: props.amiIdParameterName,
         webappOriginSourceParameter: props.webappOriginSourceParameter,
         bedrockCriRegionOverride: props.bedrockCriRegionOverride,
+        llmProvider: props.llmProvider,
+        anthropicApiKeyParameter: props.anthropicApiKeyParameter,
+        anthropicAuthTokenParameter: props.anthropicAuthTokenParameter,
+        additionalManagedPolicies: props.additionalManagedPolicies,
+        vapidKeys: props.vapidKeys,
+        eventTrigger,
       });
       this.agentCoreRuntime = agentCoreRuntime;
+
+      // Grant event trigger management to AgentCore role
+      eventTrigger.grantManage(agentCoreRuntime);
     } else {
       this.agentCoreRuntime = undefined;
     }
@@ -630,6 +627,7 @@ systemctl start myapp
     props.githubPersonalAccessTokenParameter?.grantRead(role);
     props.slackBotTokenParameter?.grantRead(role);
     props.anthropicApiKeyParameter?.grantRead(role);
+    props.anthropicAuthTokenParameter?.grantRead(role);
     props.slackBotTokenParameter?.grantRead(role);
     props.vapidKeys.grantRead(role);
 

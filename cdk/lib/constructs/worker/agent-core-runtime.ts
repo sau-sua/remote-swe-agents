@@ -53,6 +53,7 @@ export interface AgentCoreRuntimeProps {
   bedrockCriRegionOverride?: string;
   llmProvider?: string;
   anthropicApiKeyParameter?: IStringParameter;
+  anthropicAuthTokenParameter?: IStringParameter;
   additionalManagedPolicies?: string[];
   vapidKeys: VapidKeys;
   eventTrigger: EventTrigger;
@@ -134,6 +135,7 @@ export class AgentCoreRuntime extends Construct implements IGrantable {
     props.githubPersonalAccessTokenParameter?.grantRead(role);
     props.slackBotTokenParameter?.grantRead(role);
     props.anthropicApiKeyParameter?.grantRead(role);
+    props.anthropicAuthTokenParameter?.grantRead(role);
     props.webappOriginSourceParameter.grantRead(role);
     props.vapidKeys.grantRead(role);
     props.bus.api.grantPublishAndSubscribe(role);
@@ -168,6 +170,7 @@ export class AgentCoreRuntime extends Construct implements IGrantable {
         BEDROCK_CRI_REGION_OVERRIDE: props.bedrockCriRegionOverride ?? '',
         LLM_PROVIDER: props.llmProvider ?? 'bedrock',
         ANTHROPIC_API_KEY_PARAMETER_NAME: props.anthropicApiKeyParameter?.parameterName ?? '',
+        ANTHROPIC_AUTH_TOKEN_PARAMETER_NAME: props.anthropicAuthTokenParameter?.parameterName ?? '',
         VAPID_PUBLIC_KEY_PARAMETER_NAME: props.vapidKeys.publicKeyParameter.parameterName,
         VAPID_PRIVATE_KEY_PARAMETER_NAME: props.vapidKeys.privateKeyParameter.parameterName,
         EVENT_TRIGGER_SFN_ARN: props.eventTrigger.handlerStateMachine.stateMachineArn,
