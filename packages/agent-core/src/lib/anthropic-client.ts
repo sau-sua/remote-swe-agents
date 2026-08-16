@@ -7,6 +7,19 @@ import { getParameter } from './aws/ssm';
 
 const ULTRA_THINKING_KEYWORD = 'ultrathink';
 
+const TEN_MINUTES_MS = 10 * 60 * 1000;
+const SIXTY_MINUTES_MS = 60 * 60 * 1000;
+
+/**
+ * Timeout for streamed Anthropic requests. Matches the SDK's non-streaming formula
+ * (scale by max_tokens, 10 min floor, 60 min cap) so long adaptive-thinking calls
+ * are not killed at the default 10-minute stream timeout.
+ */
+export const anthropicStreamTimeoutMs = (maxTokens: number): number => {
+  const calculated = (SIXTY_MINUTES_MS * maxTokens) / 128_000;
+  return Math.min(SIXTY_MINUTES_MS, Math.max(TEN_MINUTES_MS, calculated));
+};
+
 // Beta header required when authenticating with a Claude subscription OAuth token.
 const OAUTH_BETA_HEADER = 'oauth-2025-04-20';
 // OAuth (Claude subscription) tokens are only accepted when the request identifies
@@ -123,8 +136,11 @@ const modelTypeToAnthropicModel = (modelType: ModelType): string => {
   return 'claude-sonnet-4-5-20250929';
 };
 
+type AnthropicThinking = { type: 'enabled'; budget_tokens: number } | { type: 'adaptive' };
+type AnthropicOutputConfig = { effort: 'xhigh' | 'max' };
+
 // Convert Bedrock ConverseCommandInput to Anthropic Messages API format
-const convertToAnthropicFormat = (
+export const convertToAnthropicFormat = (
   input: Omit<ConverseCommandInput, 'modelId'>,
   modelType: ModelType
 ): {
@@ -134,7 +150,9 @@ const convertToAnthropicFormat = (
   temperature?: number;
   top_p?: number;
   tools?: Anthropic.Tool[];
-  thinking?: { type: 'enabled'; budget_tokens: number };
+  thinking?: AnthropicThinking;
+  output_config?: AnthropicOutputConfig;
+  thinkingBudget?: number;
   metadata?: Anthropic.Metadata;
 } => {
   const modelConfig = modelConfigs[modelType];
@@ -293,10 +311,12 @@ const convertToAnthropicFormat = (
   }
 
   // Get max_tokens from inference config
-  const maxTokens = input.inferenceConfig?.maxTokens || 8192;
+  let maxTokens = input.inferenceConfig?.maxTokens || 8192;
 
   // Handle thinking/reasoning
-  let thinking: { type: 'enabled'; budget_tokens: number } | undefined;
+  let thinking: AnthropicThinking | undefined;
+  let output_config: AnthropicOutputConfig | undefined;
+  let thinkingBudget: number | undefined;
   if (modelConfig.reasoningSupport) {
     const shouldEnableReasoning =
       !input.toolConfig?.toolChoice &&
@@ -309,8 +329,22 @@ const convertToAnthropicFormat = (
 
     if (shouldEnableReasoning) {
       const enableUltraThink = shouldUltraThink(input);
-      const budget = enableUltraThink ? Math.min(Math.floor(modelConfig.maxOutputTokens / 2), 31999) : 2000;
-      thinking = { type: 'enabled', budget_tokens: budget };
+
+      if (modelConfig.adaptiveThinkingOnly) {
+        // Sonnet 5 / Opus 4.7+ reject thinking.type.enabled (400). Use adaptive + effort.
+        thinking = { type: 'adaptive' };
+        output_config = { effort: enableUltraThink ? 'max' : 'xhigh' };
+        maxTokens = modelConfig.maxOutputTokens;
+        if (enableUltraThink) {
+          thinkingBudget = Math.min(Math.floor(modelConfig.maxOutputTokens / 2), 31999);
+        }
+      } else {
+        const budget = enableUltraThink ? Math.min(Math.floor(modelConfig.maxOutputTokens / 2), 31999) : 2000;
+        thinking = { type: 'enabled', budget_tokens: budget };
+        if (enableUltraThink) {
+          thinkingBudget = budget;
+        }
+      }
     }
   }
 
@@ -322,6 +356,8 @@ const convertToAnthropicFormat = (
     top_p: input.inferenceConfig?.topP,
     tools,
     thinking,
+    output_config,
+    thinkingBudget,
   };
 };
 
@@ -425,17 +461,15 @@ export const anthropicConverse = async (
   console.log(`Using Anthropic API with model: ${modelName} (auth: ${isOAuth ? 'oauth' : 'api-key'})`);
 
   // Convert input format
-  const { messages, system, max_tokens, temperature, top_p, tools, thinking } = convertToAnthropicFormat(
-    input,
-    modelType
-  );
+  const { messages, system, max_tokens, temperature, top_p, tools, thinking, output_config, thinkingBudget } =
+    convertToAnthropicFormat(input, modelType);
 
   // OAuth (Claude subscription) tokens require the request to identify as Claude Code
   // via the leading system prompt block; otherwise the API rejects the credential.
   const finalSystem = isOAuth ? prependClaudeCodeSystemPrompt(system) : system;
 
   // Build request parameters
-  const requestParams: Anthropic.MessageCreateParamsNonStreaming = {
+  const requestParams: Anthropic.MessageStreamParams = {
     model: modelName,
     messages,
     max_tokens,
@@ -445,25 +479,27 @@ export const anthropicConverse = async (
     ...(tools && tools.length > 0 && { tools }),
   };
 
-  // Add thinking if enabled
+  // Add thinking if enabled. Adaptive models (Sonnet 5 / Opus 4.7+) also need output_config.effort.
   if (thinking) {
     (requestParams as any).thinking = thinking;
+  }
+  if (output_config) {
+    (requestParams as any).output_config = output_config;
   }
 
   // Note: Do not send experimental `betas` field to Anthropic API.
   // Some models currently reject unknown top-level fields with `Extra inputs are not permitted`.
 
-  // Call Anthropic API
-  const anthropicResponse = await client.messages.create(requestParams);
+  // Stream and assemble the final message. The SDK rejects non-streaming calls when
+  // max_tokens implies >10 minutes (e.g. Sonnet 5 adaptive thinking at 64k tokens).
+  const timeout = anthropicStreamTimeoutMs(max_tokens);
+  const anthropicResponse = await client.messages.stream(requestParams, { timeout }).finalMessage();
 
   // Convert response
   const response = convertFromAnthropicResponse(anthropicResponse);
 
   // Track token usage
   await trackTokenUsage(workerId, modelName, response);
-
-  // Return thinking budget if ultrathink was used
-  const thinkingBudget = thinking && thinking.budget_tokens !== 2000 ? thinking.budget_tokens : undefined;
 
   return { response, thinkingBudget };
 };

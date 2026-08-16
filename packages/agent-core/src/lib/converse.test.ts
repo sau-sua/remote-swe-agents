@@ -119,6 +119,22 @@ describe('preProcessInput', () => {
     });
   });
 
+  describe('adaptive thinking model (sonnet5)', () => {
+    test('sets reasoning_config type adaptive and output_config.effort', () => {
+      const { input } = preProcessInput(baseInput(), 'sonnet5', 0);
+      const fields = input.additionalModelRequestFields as Record<string, unknown>;
+      expect(fields.reasoning_config).toEqual({ type: 'adaptive' });
+      expect(fields.output_config).toEqual({ effort: 'xhigh' });
+    });
+
+    test('uses effort max when ultrathink is in user message', () => {
+      const { input, thinkingBudget } = preProcessInput(baseInput('please ultrathink this'), 'sonnet5', 0);
+      const fields = input.additionalModelRequestFields as Record<string, unknown>;
+      expect(fields.output_config).toEqual({ effort: 'max' });
+      expect(thinkingBudget).toBeGreaterThan(2000);
+    });
+  });
+
   describe('ultrathink keyword', () => {
     test('increases thinking budget when ultrathink is in user message', () => {
       const { input, thinkingBudget } = preProcessInput(baseInput('please ultrathink this'), 'sonnet4.6', 0);
