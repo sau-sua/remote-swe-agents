@@ -15,7 +15,7 @@ export type RuntimeType = z.infer<typeof runtimeTypeSchema>;
  */
 export const defaultAgentConfig: { runtimeType: RuntimeType; defaultModel: ModelType } = {
   runtimeType: 'agent-core',
-  defaultModel: 'opus4.6',
+  defaultModel: 'sonnet5',
 };
 
 export const customAgentSchema = z.object({

@@ -119,6 +119,22 @@ describe('preProcessInput', () => {
     });
   });
 
+  describe('adaptive thinking model (sonnet5)', () => {
+    test('sets reasoning_config type adaptive and output_config.effort', () => {
+      const { input } = preProcessInput(baseInput(), 'sonnet5', 0);
+      const fields = input.additionalModelRequestFields as Record<string, unknown>;
+      expect(fields.reasoning_config).toEqual({ type: 'adaptive' });
+      expect(fields.output_config).toEqual({ effort: 'xhigh' });
+    });
+
+    test('uses effort max when ultrathink is in user message', () => {
+      const { input, thinkingBudget } = preProcessInput(baseInput('please ultrathink this'), 'sonnet5', 0);
+      const fields = input.additionalModelRequestFields as Record<string, unknown>;
+      expect(fields.output_config).toEqual({ effort: 'max' });
+      expect(thinkingBudget).toBeGreaterThan(2000);
+    });
+  });
+
   describe('ultrathink keyword', () => {
     test('increases thinking budget when ultrathink is in user message', () => {
       const { input, thinkingBudget } = preProcessInput(baseInput('please ultrathink this'), 'sonnet4.6', 0);
@@ -131,6 +147,48 @@ describe('preProcessInput', () => {
     test('does not increase budget without ultrathink keyword', () => {
       const { thinkingBudget } = preProcessInput(baseInput('just a normal message'), 'sonnet4.6', 0);
       expect(thinkingBudget).toBeUndefined();
+    });
+  });
+
+  describe('assistant message prefill normalization', () => {
+    const withTrailingAssistant = (): ConverseCommandInput => ({
+      modelId: 'dummy',
+      messages: [
+        { role: 'user', content: [{ text: 'Count to 3.' }] },
+        { role: 'assistant', content: [{ text: '1, 2, 3.' }] },
+      ],
+    });
+
+    test('strips trailing assistant for prefill-unsupported model (sonnet5)', () => {
+      const { input } = preProcessInput(withTrailingAssistant(), 'sonnet5', 0);
+      expect(input.messages?.map((m) => m.role)).toEqual(['user']);
+    });
+
+    test('keeps trailing assistant for prefill-supported model (sonnet4.5)', () => {
+      const { input } = preProcessInput(withTrailingAssistant(), 'sonnet4.5', 0);
+      expect(input.messages?.map((m) => m.role)).toEqual(['user', 'assistant']);
+    });
+
+    test('strips multiple trailing assistant messages for sonnet5', () => {
+      const input: ConverseCommandInput = {
+        modelId: 'dummy',
+        messages: [
+          { role: 'user', content: [{ text: 'hi' }] },
+          { role: 'assistant', content: [{ text: 'a' }] },
+          { role: 'assistant', content: [{ text: 'b' }] },
+        ],
+      };
+      const { input: processed } = preProcessInput(input, 'sonnet5', 0);
+      expect(processed.messages?.map((m) => m.role)).toEqual(['user']);
+    });
+
+    test('leaves an all-assistant conversation untouched (never empties)', () => {
+      const input: ConverseCommandInput = {
+        modelId: 'dummy',
+        messages: [{ role: 'assistant', content: [{ text: 'x' }] }],
+      };
+      const { input: processed } = preProcessInput(input, 'sonnet5', 0);
+      expect(processed.messages?.map((m) => m.role)).toEqual(['assistant']);
     });
   });
 });

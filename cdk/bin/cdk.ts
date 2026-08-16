@@ -75,7 +75,8 @@ const props: MainStackProps = {
         github: {
           appId: process.env.GITHUB_APP_ID!,
           installationId: process.env.GITHUB_INSTALLATION_ID!,
-          privateKeyParameterName: process.env.GITHUB_APP_PRIVATE_KEY_PARAMETER_NAME ?? '/remote-swe/github/app-private-key',
+          privateKeyParameterName:
+            process.env.GITHUB_APP_PRIVATE_KEY_PARAMETER_NAME ?? '/remote-swe/github/app-private-key',
         },
       }
     : {
@@ -110,6 +111,9 @@ const props: MainStackProps = {
   bedrockCriRegionOverride: process.env.BEDROCK_CRI_REGION_OVERRIDE,
   llmProvider: process.env.LLM_PROVIDER,
   ...(process.env.ANTHROPIC_API_KEY ? { anthropicApiKeyParameterName: '/remote-swe/anthropic/api-key' } : {}),
+  ...(process.env.ANTHROPIC_AUTH_TOKEN || process.env.CLAUDE_CODE_OAUTH_TOKEN
+    ? { anthropicAuthTokenParameterName: '/remote-swe/anthropic/oauth-token' }
+    : {}),
   // Set DEPLOY_BEDROCK_RUNTIME=true to deploy Bedrock Agent Core (subject to account limit). Default: use Claude via Anthropic only.
   deployBedrockRuntime: process.env.DEPLOY_BEDROCK_RUNTIME === 'true',
   workerInstanceType: process.env.WORKER_INSTANCE_TYPE,

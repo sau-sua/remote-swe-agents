@@ -126,9 +126,7 @@ function buildRunInstancesInput(
       Key: 'RemoteSweWorkerId',
       Value: workerId,
     },
-    ...(remoteSweStackName
-      ? [{ Key: 'RemoteSweStackName' as const, Value: remoteSweStackName }]
-      : []),
+    ...(remoteSweStackName ? [{ Key: 'RemoteSweStackName' as const, Value: remoteSweStackName }] : []),
   ];
 
   return {
