@@ -32,7 +32,18 @@ export const sessionItemSchema = z.object({
   runtimeType: runtimeTypeSchema.optional(),
   parentSessionId: z.string().optional(),
   creatorSessionId: z.string().optional(),
+  // Worker ID of the successor session this session was handed over to (webapp
+  // handover feature). Written exactly once with a conditional update — its
+  // presence is the idempotency guard that prevents concurrent/repeated
+  // handovers from creating multiple successors.
+  handedOverTo: z.string().optional(),
   agentName: z.string().optional(),
+  rewindState: z
+    .object({
+      cutoffSK: z.string(),
+      rewindedAt: z.number(),
+    })
+    .optional(),
 });
 
 export type SessionItem = z.infer<typeof sessionItemSchema>;
