@@ -120,6 +120,15 @@ export class AgentCoreRuntime extends Construct implements IGrantable {
         BEDROCK_CRI_REGION_OVERRIDE: props.bedrockCriRegionOverride ?? '',
         LLM_PROVIDER: props.llmProvider ?? 'bedrock',
         ANTHROPIC_API_KEY_PARAMETER_NAME: props.anthropicApiKeyParameter?.parameterName ?? '',
+        CLAUDE_CODE_OAUTH_TOKEN_PARAMETER_NAME: props.anthropicAuthTokenParameter?.parameterName ?? '',
+        ANTHROPIC_AUTH_TOKEN_PARAMETER_NAME: props.anthropicAuthTokenParameter?.parameterName ?? '',
+        VAPID_PUBLIC_KEY_PARAMETER_NAME: props.vapidKeys.publicKeyParameter.parameterName,
+        VAPID_PRIVATE_KEY_PARAMETER_NAME: props.vapidKeys.privateKeyParameter.parameterName,
+        EVENT_TRIGGER_SFN_ARN: props.eventTrigger.handlerStateMachine.stateMachineArn,
+        EVENT_TRIGGER_SFN_ROLE_ARN: props.eventTrigger.schedulerRole.roleArn,
+        EVENT_TRIGGER_TTL_SFN_ARN: props.eventTrigger.ttlStateMachine.stateMachineArn,
+        EVENT_TRIGGER_TTL_SFN_ROLE_ARN: props.eventTrigger.schedulerRole.roleArn,
+        EVENT_TRIGGER_RESOURCE_PREFIX: props.eventTrigger.resourcePrefix,
       },
     });
     runtime.node.addDependency(role);

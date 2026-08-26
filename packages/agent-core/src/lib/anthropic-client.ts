@@ -14,21 +14,64 @@ const ULTRA_THINKING_KEYWORD = 'ultrathink';
 // Cache for API key to avoid repeated SSM calls
 let cachedApiKey: string | undefined;
 
-// Initialize Anthropic client
-const getAnthropicClient = async () => {
-  if (cachedApiKey) {
-    return new Anthropic({ apiKey: cachedApiKey });
+/**
+ * Timeout for streamed Anthropic requests. Matches the SDK's non-streaming formula
+ * (scale by max_tokens, 10 min floor, 60 min cap) so long adaptive-thinking calls
+ * are not killed at the default 10-minute stream timeout.
+ */
+export const anthropicStreamTimeoutMs = (maxTokens: number): number => {
+  const calculated = (SIXTY_MINUTES_MS * maxTokens) / 128_000;
+  return Math.min(SIXTY_MINUTES_MS, Math.max(TEN_MINUTES_MS, calculated));
+};
+
+// Beta header required when authenticating with a Claude subscription OAuth token.
+const OAUTH_BETA_HEADER = 'oauth-2025-04-20';
+// OAuth (Claude subscription) tokens are only accepted when the request identifies
+// itself as Claude Code via the leading system prompt block.
+const CLAUDE_CODE_SYSTEM_PROMPT = "You are Claude Code, Anthropic's official CLI for Claude.";
+
+// Cache the resolved Anthropic client to avoid repeated SSM calls.
+let cachedClient: { client: Anthropic; isOAuth: boolean } | undefined;
+
+// Resolve a credential either directly from an environment variable or, when only a
+// parameter name is provided, from SSM Parameter Store.
+const resolveCredential = async (envVar?: string, parameterName?: string): Promise<string | undefined> => {
+  if (envVar) {
+    return envVar;
+  }
+  if (parameterName) {
+    return getParameter(parameterName);
+  }
+  return undefined;
+};
+
+// Initialize Anthropic client. Supports two authentication methods:
+//   1. Claude Code OAuth token, e.g. from `claude setup-token`
+//      (CLAUDE_CODE_OAUTH_TOKEN / CLAUDE_CODE_OAUTH_TOKEN_PARAMETER_NAME,
+//       with ANTHROPIC_AUTH_TOKEN / ANTHROPIC_AUTH_TOKEN_PARAMETER_NAME as aliases)
+//      -> Authorization: Bearer header + oauth beta header
+//   2. API key  (ANTHROPIC_API_KEY / ANTHROPIC_API_KEY_PARAMETER_NAME) -> x-api-key header
+// When both are configured, the OAuth token takes precedence.
+const getAnthropicClient = async (): Promise<{ client: Anthropic; isOAuth: boolean }> => {
+  if (cachedClient) {
+    return cachedClient;
   }
 
-  // First, check if API key is directly provided as environment variable
-  let apiKey = process.env.ANTHROPIC_API_KEY;
-
-  // If not, fetch from SSM Parameter Store
-  if (!apiKey) {
-    const parameterName = process.env.ANTHROPIC_API_KEY_PARAMETER_NAME;
-    if (parameterName) {
-      apiKey = await getParameter(parameterName);
-    }
+  // Claude Code OAuth token (Claude subscription) takes precedence when provided.
+  const authToken = await resolveCredential(
+    process.env.CLAUDE_CODE_OAUTH_TOKEN || process.env.ANTHROPIC_AUTH_TOKEN,
+    process.env.CLAUDE_CODE_OAUTH_TOKEN_PARAMETER_NAME || process.env.ANTHROPIC_AUTH_TOKEN_PARAMETER_NAME
+  );
+  if (authToken) {
+    cachedClient = {
+      client: new Anthropic({
+        apiKey: null,
+        authToken,
+        defaultHeaders: { 'anthropic-beta': OAUTH_BETA_HEADER },
+      }),
+      isOAuth: true,
+    };
+    return cachedClient;
   }
 
   if (!apiKey) {
@@ -37,8 +80,21 @@ const getAnthropicClient = async () => {
     );
   }
 
-  cachedApiKey = apiKey;
-  return new Anthropic({ apiKey });
+  throw new Error(
+    'Anthropic credentials not found. Set a Claude Code OAuth token (CLAUDE_CODE_OAUTH_TOKEN / ' +
+      'CLAUDE_CODE_OAUTH_TOKEN_PARAMETER_NAME) or an API key (ANTHROPIC_API_KEY / ANTHROPIC_API_KEY_PARAMETER_NAME).'
+  );
+};
+
+// Ensure the Claude Code identity prompt is the first system block. Required for OAuth
+// (Claude subscription) tokens. Any existing system prompt is preserved after it.
+const prependClaudeCodeSystemPrompt = (
+  system: string | Anthropic.TextBlockParam[] | undefined
+): Anthropic.TextBlockParam[] => {
+  const claudeCodeBlock: Anthropic.TextBlockParam = { type: 'text', text: CLAUDE_CODE_SYSTEM_PROMPT };
+  if (!system) {
+    return [claudeCodeBlock];
+  return [claudeCodeBlock, ...system];
 };
 
 // Convert Bedrock model type to Anthropic model name
@@ -56,7 +112,6 @@ const modelTypeToAnthropicModel = (modelType: ModelType): string => {
     'anthropic.claude-3-5-sonnet-20241022-v2:0': 'claude-3-5-sonnet-20241022',
     'anthropic.claude-3-5-haiku-20241022-v1:0': 'claude-3-5-haiku-20241022',
     'anthropic.claude-4-opus-20250514-v1:0': 'claude-4-opus-20250514',
-    'anthropic.claude-4-1-opus-20250514-v1:0': 'claude-4-1-opus-20250514',
     'anthropic.claude-4-sonnet-20250514-v1:0': 'claude-4-sonnet-20250514',
   };
 

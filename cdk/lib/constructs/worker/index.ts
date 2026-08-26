@@ -38,6 +38,10 @@ export interface WorkerProps {
   llmProvider?: string;
   anthropicApiKeyParameter?: IStringParameter;
   /**
+   * Claude Code OAuth token (e.g. from `claude setup-token`). Preferred over an API key when llmProvider is 'anthropic'.
+   */
+  anthropicAuthTokenParameter?: IStringParameter;
+  /**
    * Deploy Bedrock Agent Core Runtime. Set to false to use Claude via Anthropic API only (avoids AWS Bedrock agent limit).
    * @default false
    */
@@ -351,6 +355,25 @@ export ANTHROPIC_API_KEY=${
           ? `$(aws ssm get-parameter --name ${props.anthropicApiKeyParameter.parameterName} --query \"Parameter.Value\" --output text)`
           : '""'
       }
+export CLAUDE_CODE_OAUTH_TOKEN=${
+        props.anthropicAuthTokenParameter
+          ? `$(aws ssm get-parameter --name ${props.anthropicAuthTokenParameter.parameterName} --region ${Stack.of(this).region} --query \"Parameter.Value\" --output text)`
+          : '""'
+      }
+export ANTHROPIC_AUTH_TOKEN="$CLAUDE_CODE_OAUTH_TOKEN"
+export GITHUB_PERSONAL_ACCESS_TOKEN=${
+        props.githubPersonalAccessTokenParameter
+          ? `$(aws ssm get-parameter --name ${props.githubPersonalAccessTokenParameter.parameterName} --region ${Stack.of(this).region} --query \"Parameter.Value\" --output text 2>/dev/null || echo "")`
+          : '""'
+      }
+
+# Fetch VAPID keys from SSM if configured
+if [ -n "$VAPID_PUBLIC_KEY_PARAMETER_NAME" ]; then
+  export VAPID_PUBLIC_KEY=$(aws ssm get-parameter --name "$VAPID_PUBLIC_KEY_PARAMETER_NAME" --region ${Stack.of(this).region} --query "Parameter.Value" --output text 2>/dev/null || echo "")
+fi
+if [ -n "$VAPID_PRIVATE_KEY_PARAMETER_NAME" ]; then
+  export VAPID_PRIVATE_KEY=$(aws ssm get-parameter --name "$VAPID_PRIVATE_KEY_PARAMETER_NAME" --region ${Stack.of(this).region} --query "Parameter.Value" --output text 2>/dev/null || echo "")
+fi
 
 # Start app
 cd packages/worker
@@ -397,6 +420,15 @@ Environment=BEDROCK_AWS_ROLE_NAME=${props.loadBalancing?.roleName ?? ''}
 Environment=BEDROCK_CRI_REGION_OVERRIDE=${props.bedrockCriRegionOverride ?? ''}
 Environment=LLM_PROVIDER=${props.llmProvider ?? 'bedrock'}
 Environment=ANTHROPIC_API_KEY_PARAMETER_NAME=${props.anthropicApiKeyParameter?.parameterName ?? ''}
+Environment=CLAUDE_CODE_OAUTH_TOKEN_PARAMETER_NAME=${props.anthropicAuthTokenParameter?.parameterName ?? ''}
+Environment=ANTHROPIC_AUTH_TOKEN_PARAMETER_NAME=${props.anthropicAuthTokenParameter?.parameterName ?? ''}
+Environment=VAPID_PUBLIC_KEY_PARAMETER_NAME=${props.vapidKeys.publicKeyParameter.parameterName}
+Environment=VAPID_PRIVATE_KEY_PARAMETER_NAME=${props.vapidKeys.privateKeyParameter.parameterName}
+Environment=EVENT_TRIGGER_SFN_ARN=${eventTrigger.handlerStateMachine.stateMachineArn}
+Environment=EVENT_TRIGGER_SFN_ROLE_ARN=${eventTrigger.schedulerRole.roleArn}
+Environment=EVENT_TRIGGER_TTL_SFN_ARN=${eventTrigger.ttlStateMachine.stateMachineArn}
+Environment=EVENT_TRIGGER_TTL_SFN_ROLE_ARN=${eventTrigger.schedulerRole.roleArn}
+Environment=EVENT_TRIGGER_RESOURCE_PREFIX=${eventTrigger.resourcePrefix}
 
 [Install]
 WantedBy=multi-user.target

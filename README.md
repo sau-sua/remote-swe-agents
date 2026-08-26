@@ -93,16 +93,16 @@ aws ssm put-parameter \
 
 **Optional: If Using Anthropic API**
 
-If you plan to use Anthropic API instead of AWS Bedrock, also create an SSM parameter for the Anthropic API key:
+If you plan to use Anthropic API instead of AWS Bedrock, create an SSM parameter for a Claude Code OAuth token (`CLAUDE_CODE_OAUTH_TOKEN`). Generate a long-lived token with `claude setup-token`:
 
 ```bash
 aws ssm put-parameter \
-    --name /remote-swe/anthropic/api-key \
-    --value "your-anthropic-api-key-here" \
+    --name /remote-swe/anthropic/oauth-token \
+    --value "your-claude-code-oauth-token-here" \
     --type String
 ```
 
-Replace `your-anthropic-api-key-here` with your actual Anthropic API key from [Anthropic Console](https://console.anthropic.com/).
+Replace `your-claude-code-oauth-token-here` with the token from `claude setup-token` (typically starts with `sk-ant-oat01-...`).
 
 ### Step 3: GitHub Integration Setup
 
@@ -215,20 +215,21 @@ To use Anthropic API, add these variables to your `.env.local` file:
 
 ```sh
 LLM_PROVIDER=anthropic
-ANTHROPIC_API_KEY=sk-ant-api03-your-api-key-here
+CLAUDE_CODE_OAUTH_TOKEN=sk-ant-oat01-your-oauth-token-here
 ```
+
+Any non-empty `CLAUDE_CODE_OAUTH_TOKEN` enables lookup of the SSM parameter `/remote-swe/anthropic/oauth-token`. Store the actual token in SSM (see Step 2).
 
 **Benefits of using Anthropic API:**
 - Direct access to Anthropic's latest models without AWS Bedrock service limits
 - May have different rate limits and pricing compared to Bedrock
-- Useful if you already have Anthropic API credits
+- Useful if you already have a Claude subscription (OAuth) or Anthropic API credits
 
-**To get an Anthropic API key:**
-1. Visit [Anthropic Console](https://console.anthropic.com/)
-2. Sign up or log in to your account
-3. Navigate to API Keys section
-4. Create a new API key
-5. Copy the key (starts with `sk-ant-api03-...`)
+**To get a Claude Code OAuth token:**
+1. Install [Claude Code](https://docs.anthropic.com/en/docs/claude-code)
+2. Run `claude setup-token`
+3. Copy the token (starts with `sk-ant-oat01-...`)
+4. Store it in SSM `/remote-swe/anthropic/oauth-token`
 
 > [!NOTE]
 > When using `LLM_PROVIDER=anthropic`, AWS Bedrock configurations (like `BEDROCK_CRI_REGION_OVERRIDE`) will be ignored. Token usage tracking and cost calculations will still work as expected in DynamoDB.

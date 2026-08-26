@@ -91,16 +91,16 @@ aws ssm put-parameter \
 
 **オプション：Anthropic APIを使用する場合**
 
-AWS Bedrockの代わりにAnthropic APIを使用する予定の場合は、Anthropic APIキーのSSMパラメータも作成します：
+AWS Bedrockの代わりにAnthropic APIを使用する予定の場合は、Claude CodeのOAuthトークン（`CLAUDE_CODE_OAUTH_TOKEN`）用のSSMパラメータを作成します。長期トークンは `claude setup-token` で発行できます：
 
 ```bash
 aws ssm put-parameter \
-    --name /remote-swe/anthropic/api-key \
-    --value "your-anthropic-api-key-here" \
+    --name /remote-swe/anthropic/oauth-token \
+    --value "your-claude-code-oauth-token-here" \
     --type String
 ```
 
-`your-anthropic-api-key-here`を[Anthropic Console](https://console.anthropic.com/)から取得した実際のAnthropic APIキーに置き換えてください。
+`your-claude-code-oauth-token-here`を `claude setup-token` で取得したトークン（通常は `sk-ant-oat01-...` で始まる）に置き換えてください。
 
 ### ステップ3：GitHub統合のセットアップ
 
@@ -213,20 +213,21 @@ Anthropic APIを使用するには、`.env.local` ファイルに以下の変数
 
 ```sh
 LLM_PROVIDER=anthropic
-ANTHROPIC_API_KEY=sk-ant-api03-your-api-key-here
+CLAUDE_CODE_OAUTH_TOKEN=sk-ant-oat01-your-oauth-token-here
 ```
+
+`CLAUDE_CODE_OAUTH_TOKEN` が空でなければ、SSMパラメータ `/remote-swe/anthropic/oauth-token` を参照します。実際のトークンはSSMに保存してください（ステップ2参照）。
 
 **Anthropic APIを使用するメリット：**
 - AWS Bedrockのサービス制限なしに、Anthropicの最新モデルに直接アクセスできる
 - Bedrockと比較して異なるレート制限と価格設定がある可能性がある
-- すでにAnthropic APIクレジットをお持ちの場合に便利
+- Claudeのサブスクリプション（OAuth）やAnthropic APIクレジットをお持ちの場合に便利
 
-**Anthropic APIキーを取得するには：**
-1. [Anthropic Console](https://console.anthropic.com/)にアクセス
-2. アカウントにサインアップまたはログイン
-3. API Keysセクションに移動
-4. 新しいAPIキーを作成
-5. キーをコピー（`sk-ant-api03-...`で始まります）
+**Claude Code OAuthトークンを取得するには：**
+1. [Claude Code](https://docs.anthropic.com/en/docs/claude-code)をインストール
+2. `claude setup-token` を実行
+3. トークンをコピー（`sk-ant-oat01-...`で始まります）
+4. SSM `/remote-swe/anthropic/oauth-token` に保存
 
 > [!NOTE]
 > `LLM_PROVIDER=anthropic`を使用する場合、AWS Bedrockの設定（`BEDROCK_CRI_REGION_OVERRIDE`など）は無視されます。トークン使用量の追跡とコスト計算は、DynamoDBで引き続き正常に機能します。
