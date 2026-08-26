@@ -91,6 +91,10 @@ const prependClaudeCodeSystemPrompt = (
   const claudeCodeBlock: Anthropic.TextBlockParam = { type: 'text', text: CLAUDE_CODE_SYSTEM_PROMPT };
   if (!system) {
     return [claudeCodeBlock];
+  }
+  if (typeof system === 'string') {
+    return [claudeCodeBlock, { type: 'text', text: system }];
+  }
   return [claudeCodeBlock, ...system];
 };
 

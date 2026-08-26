@@ -71,7 +71,7 @@ export default function CustomAgentForm({ availableTools, editingAgent, onSucces
         id: editingAgent?.SK,
         name: editingAgent?.name ?? '',
         description: editingAgent?.description ?? '',
-        defaultModel: editingAgent?.defaultModel ?? 'sonnet3.7',
+        defaultModel: editingAgent?.defaultModel ?? 'opus5',
         systemPrompt: editingAgent?.systemPrompt ?? '',
         tools: editingAgent?.tools ?? [],
         useAllTools: editingAgent?.useAllTools ?? false,
