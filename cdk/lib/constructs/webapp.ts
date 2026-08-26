@@ -10,7 +10,7 @@ import { Bucket } from 'aws-cdk-lib/aws-s3';
 import { EdgeFunction } from './cf-lambda-furl-service/edge-function';
 import { ICertificate } from 'aws-cdk-lib/aws-certificatemanager';
 import { Auth } from './auth/';
-import { ContainerImageBuild } from 'deploy-time-build';
+import { ContainerImageBuild } from '@cdklabs/deploy-time-build';
 import { join } from 'path';
 import { AsyncJob } from './async-job';
 import { IStringParameter } from 'aws-cdk-lib/aws-ssm';
@@ -20,6 +20,7 @@ import { WorkerBus } from './worker/bus';
 import { PolicyStatement } from 'aws-cdk-lib/aws-iam';
 import { LambdaWarmer } from './lambda-warmer';
 import { AgentCoreRuntime } from './worker/agent-core-runtime';
+import { VapidKeys } from './vapid-keys';
 
 export interface WebappProps {
   storage: Storage;
@@ -66,6 +67,7 @@ export interface WebappProps {
    * @default false
    */
   slackOnlySessionCreation?: boolean;
+  vapidKeys?: VapidKeys;
 }
 
 export class Webapp extends Construct {
@@ -121,12 +123,19 @@ export class Webapp extends Construct {
         BUCKET_NAME: storage.bucket.bucketName,
         AGENT_RUNTIME_ARN: props.agentCoreRuntime?.runtimeArn ?? '',
         BEDROCK_CRI_REGION_OVERRIDE: props.bedrockCriRegionOverride ?? '',
+        REMOTE_SWE_STACK_NAME: Stack.of(this).stackName,
         ...(props.workerUseSpot ? { WORKER_USE_SPOT: 'true' } : {}),
         ...(props.workerTerminateOnSessionEnd ? { WORKER_TERMINATE_ON_SESSION_END: 'true' } : {}),
         ...(props.slackOnlySessionCreation
           ? {
               SLACK_ONLY_SESSION_CREATION: 'true',
               NEXT_PUBLIC_SLACK_ONLY_SESSION_CREATION: 'true',
+            }
+          : {}),
+        ...(props.vapidKeys
+          ? {
+              VAPID_PUBLIC_KEY_PARAMETER_NAME: props.vapidKeys.publicKeyParameter.parameterName,
+              VAPID_PRIVATE_KEY_PARAMETER_NAME: props.vapidKeys.privateKeyParameter.parameterName,
             }
           : {}),
       },
@@ -139,6 +148,10 @@ export class Webapp extends Construct {
     storage.bucket.grantReadWrite(handler);
     workerBus.api.grantPublish(handler);
     props.agentCoreRuntime?.grantInvoke(handler);
+    if (props.vapidKeys) {
+      props.vapidKeys.grantRead(handler);
+      handler.node.addDependency(props.vapidKeys.customResource);
+    }
 
     handler.addToRolePolicy(
       new PolicyStatement({
@@ -149,6 +162,8 @@ export class Webapp extends Construct {
           'iam:PassRole',
           'ec2:CreateTags',
           'ec2:StartInstances',
+          'ec2:StopInstances',
+          'ec2:TerminateInstances',
         ],
         resources: ['*'],
       })

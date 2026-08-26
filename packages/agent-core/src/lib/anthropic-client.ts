@@ -1,9 +1,5 @@
 import Anthropic from '@anthropic-ai/sdk';
-import {
-  ConverseCommandInput,
-  ConverseResponse,
-  ContentBlock,
-} from '@aws-sdk/client-bedrock-runtime';
+import { ConverseCommandInput, ConverseResponse, ContentBlock } from '@aws-sdk/client-bedrock-runtime';
 import { ddb, TableName } from './aws';
 import { GetCommand, PutCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
 import { modelConfigs, ModelType } from '../schema';
@@ -11,8 +7,8 @@ import { getParameter } from './aws/ssm';
 
 const ULTRA_THINKING_KEYWORD = 'ultrathink';
 
-// Cache for API key to avoid repeated SSM calls
-let cachedApiKey: string | undefined;
+const TEN_MINUTES_MS = 10 * 60 * 1000;
+const SIXTY_MINUTES_MS = 60 * 60 * 1000;
 
 /**
  * Timeout for streamed Anthropic requests. Matches the SDK's non-streaming formula
@@ -74,10 +70,11 @@ const getAnthropicClient = async (): Promise<{ client: Anthropic; isOAuth: boole
     return cachedClient;
   }
 
-  if (!apiKey) {
-    throw new Error(
-      'Anthropic API key not found. Set ANTHROPIC_API_KEY environment variable or ANTHROPIC_API_KEY_PARAMETER_NAME to fetch from SSM'
-    );
+  // Fall back to a standard API key.
+  const apiKey = await resolveCredential(process.env.ANTHROPIC_API_KEY, process.env.ANTHROPIC_API_KEY_PARAMETER_NAME);
+  if (apiKey) {
+    cachedClient = { client: new Anthropic({ apiKey }), isOAuth: false };
+    return cachedClient;
   }
 
   throw new Error(
@@ -116,16 +113,30 @@ const modelTypeToAnthropicModel = (modelType: ModelType): string => {
   };
 
   const anthropicModel = modelMapping[baseModelId];
-  if (!anthropicModel) {
-    console.warn(`Unknown model type ${modelType}, using default claude-sonnet-4-5-20250929`);
-    return 'claude-sonnet-4-5-20250929';
+  if (anthropicModel) {
+    return anthropicModel;
   }
 
-  return anthropicModel;
+  // Generic fallback for models not in the explicit map (e.g. newer Bedrock model IDs
+  // such as `anthropic.claude-opus-5` or `anthropic.claude-opus-4-6-v1`).
+  // Strip the `anthropic.` vendor prefix and any trailing Bedrock version suffix
+  // (`-v1`, `-v1:0`, ...) to derive the Anthropic API model name.
+  if (baseModelId.startsWith('anthropic.')) {
+    const derived = baseModelId.replace(/^anthropic\./, '').replace(/-v\d+(?::\d+)?$/, '');
+    if (derived) {
+      return derived;
+    }
+  }
+
+  console.warn(`Unknown model type ${modelType}, using default claude-sonnet-4-5-20250929`);
+  return 'claude-sonnet-4-5-20250929';
 };
 
+type AnthropicThinking = { type: 'enabled'; budget_tokens: number } | { type: 'adaptive' };
+type AnthropicOutputConfig = { effort: 'xhigh' | 'max' };
+
 // Convert Bedrock ConverseCommandInput to Anthropic Messages API format
-const convertToAnthropicFormat = (
+export const convertToAnthropicFormat = (
   input: Omit<ConverseCommandInput, 'modelId'>,
   modelType: ModelType
 ): {
@@ -135,7 +146,9 @@ const convertToAnthropicFormat = (
   temperature?: number;
   top_p?: number;
   tools?: Anthropic.Tool[];
-  thinking?: { type: 'enabled'; budget_tokens: number };
+  thinking?: AnthropicThinking;
+  output_config?: AnthropicOutputConfig;
+  thinkingBudget?: number;
   metadata?: Anthropic.Metadata;
 } => {
   const modelConfig = modelConfigs[modelType];
@@ -164,7 +177,11 @@ const convertToAnthropicFormat = (
                 type: 'image',
                 source: {
                   type: 'base64',
-                  media_type: (imageData.format || 'image/png') as 'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp',
+                  media_type: (imageData.format || 'image/png') as
+                    | 'image/jpeg'
+                    | 'image/png'
+                    | 'image/gif'
+                    | 'image/webp',
                   data: base64Data,
                 },
               });
@@ -196,7 +213,11 @@ const convertToAnthropicFormat = (
                     type: 'image',
                     source: {
                       type: 'base64',
-                      media_type: (rc.image.format || 'image/png') as 'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp',
+                      media_type: (rc.image.format || 'image/png') as
+                        | 'image/jpeg'
+                        | 'image/png'
+                        | 'image/gif'
+                        | 'image/webp',
                       data: base64Data,
                     },
                   });
@@ -259,7 +280,12 @@ const convertToAnthropicFormat = (
   if (input.toolConfig?.tools && input.toolConfig.tools.length > 0) {
     tools = [];
     for (const tool of input.toolConfig.tools) {
-      const spec = (tool as { toolSpec?: { name?: string; description?: string; inputSchema?: { json?: Record<string, unknown> } }; cachePoint?: { type?: string } }).toolSpec;
+      const spec = (
+        tool as {
+          toolSpec?: { name?: string; description?: string; inputSchema?: { json?: Record<string, unknown> } };
+          cachePoint?: { type?: string };
+        }
+      ).toolSpec;
       if (spec) {
         const base = spec.inputSchema?.json;
         const input_schema: Anthropic.Tool.InputSchema =
@@ -281,20 +307,40 @@ const convertToAnthropicFormat = (
   }
 
   // Get max_tokens from inference config
-  const maxTokens = input.inferenceConfig?.maxTokens || 8192;
+  let maxTokens = input.inferenceConfig?.maxTokens || 8192;
 
   // Handle thinking/reasoning
-  let thinking: { type: 'enabled'; budget_tokens: number } | undefined;
+  let thinking: AnthropicThinking | undefined;
+  let output_config: AnthropicOutputConfig | undefined;
+  let thinkingBudget: number | undefined;
   if (modelConfig.reasoningSupport) {
     const shouldEnableReasoning =
       !input.toolConfig?.toolChoice &&
-      !(input.messages?.at(-2)?.content?.at(0) && 'reasoningContent' in input.messages.at(-2)!.content!.at(0)! &&
-        input.messages?.at(-2)?.content?.at(-1) && 'toolUse' in input.messages.at(-2)!.content!.at(-1)!);
+      !(
+        input.messages?.at(-2)?.content?.at(0) &&
+        'reasoningContent' in input.messages.at(-2)!.content!.at(0)! &&
+        input.messages?.at(-2)?.content?.at(-1) &&
+        'toolUse' in input.messages.at(-2)!.content!.at(-1)!
+      );
 
     if (shouldEnableReasoning) {
       const enableUltraThink = shouldUltraThink(input);
-      const budget = enableUltraThink ? Math.min(Math.floor(modelConfig.maxOutputTokens / 2), 31999) : 2000;
-      thinking = { type: 'enabled', budget_tokens: budget };
+
+      if (modelConfig.adaptiveThinkingOnly) {
+        // Sonnet 5 / Opus 4.7+ reject thinking.type.enabled (400). Use adaptive + effort.
+        thinking = { type: 'adaptive' };
+        output_config = { effort: enableUltraThink ? 'max' : 'xhigh' };
+        maxTokens = modelConfig.maxOutputTokens;
+        if (enableUltraThink) {
+          thinkingBudget = Math.min(Math.floor(modelConfig.maxOutputTokens / 2), 31999);
+        }
+      } else {
+        const budget = enableUltraThink ? Math.min(Math.floor(modelConfig.maxOutputTokens / 2), 31999) : 2000;
+        thinking = { type: 'enabled', budget_tokens: budget };
+        if (enableUltraThink) {
+          thinkingBudget = budget;
+        }
+      }
     }
   }
 
@@ -306,6 +352,8 @@ const convertToAnthropicFormat = (
     top_p: input.inferenceConfig?.topP,
     tools,
     thinking,
+    output_config,
+    thinkingBudget,
   };
 };
 
@@ -336,9 +384,7 @@ const shouldUltraThink = (input: Omit<ConverseCommandInput, 'modelId'>): boolean
 };
 
 // Convert Anthropic response to Bedrock ConverseResponse format
-const convertFromAnthropicResponse = (
-  response: Anthropic.Message
-): ConverseResponse => {
+const convertFromAnthropicResponse = (response: Anthropic.Message): ConverseResponse => {
   const content: ContentBlock[] = [];
 
   for (const block of response.content) {
@@ -365,7 +411,12 @@ const convertFromAnthropicResponse = (
     }
   }
 
-  const usage = response.usage as { input_tokens: number; output_tokens: number; cache_read_input_tokens?: number; cache_creation_input_tokens?: number };
+  const usage = response.usage as {
+    input_tokens: number;
+    output_tokens: number;
+    cache_read_input_tokens?: number;
+    cache_creation_input_tokens?: number;
+  };
   const inputTokens = usage.input_tokens ?? 0;
   const outputTokens = usage.output_tokens ?? 0;
 
@@ -399,46 +450,52 @@ export const anthropicConverse = async (
     throw new Error(`Max tokens exceeded too many times (${maxTokensExceededCount})`);
   }
 
-  const client = await getAnthropicClient();
+  const { client, isOAuth } = await getAnthropicClient();
   const modelType = modelTypes[Math.floor(Math.random() * modelTypes.length)];
   const modelName = modelTypeToAnthropicModel(modelType);
 
-  console.log(`Using Anthropic API with model: ${modelName}`);
+  console.log(`Using Anthropic API with model: ${modelName} (auth: ${isOAuth ? 'oauth' : 'api-key'})`);
 
   // Convert input format
-  const { messages, system, max_tokens, temperature, top_p, tools, thinking } =
+  const { messages, system, max_tokens, temperature, top_p, tools, thinking, output_config, thinkingBudget } =
     convertToAnthropicFormat(input, modelType);
 
+  // OAuth (Claude subscription) tokens require the request to identify as Claude Code
+  // via the leading system prompt block; otherwise the API rejects the credential.
+  const finalSystem = isOAuth ? prependClaudeCodeSystemPrompt(system) : system;
+
   // Build request parameters
-  const requestParams: Anthropic.MessageCreateParamsNonStreaming = {
+  const requestParams: Anthropic.MessageStreamParams = {
     model: modelName,
     messages,
     max_tokens,
-    ...(system && { system }),
+    ...(finalSystem && { system: finalSystem }),
     ...(temperature !== undefined && { temperature }),
     ...(top_p !== undefined && { top_p }),
     ...(tools && tools.length > 0 && { tools }),
   };
 
-  // Add thinking if enabled
+  // Add thinking if enabled. Adaptive models (Sonnet 5 / Opus 4.7+) also need output_config.effort.
   if (thinking) {
     (requestParams as any).thinking = thinking;
+  }
+  if (output_config) {
+    (requestParams as any).output_config = output_config;
   }
 
   // Note: Do not send experimental `betas` field to Anthropic API.
   // Some models currently reject unknown top-level fields with `Extra inputs are not permitted`.
 
-  // Call Anthropic API
-  const anthropicResponse = await client.messages.create(requestParams);
+  // Stream and assemble the final message. The SDK rejects non-streaming calls when
+  // max_tokens implies >10 minutes (e.g. Sonnet 5 adaptive thinking at 64k tokens).
+  const timeout = anthropicStreamTimeoutMs(max_tokens);
+  const anthropicResponse = await client.messages.stream(requestParams, { timeout }).finalMessage();
 
   // Convert response
   const response = convertFromAnthropicResponse(anthropicResponse);
 
   // Track token usage
   await trackTokenUsage(workerId, modelName, response);
-
-  // Return thinking budget if ultrathink was used
-  const thinkingBudget = thinking && thinking.budget_tokens !== 2000 ? thinking.budget_tokens : undefined;
 
   return { response, thinkingBudget };
 };

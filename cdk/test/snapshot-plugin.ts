@@ -2,7 +2,7 @@ module.exports = {
   test: (val: any) => typeof val === 'string',
   serialize: (val: any) => {
     return `"${val //
-      .replace(/([A-Fa-f0-9]{64}.zip)/, 'REDACTED')
+      .replace(/([A-Fa-f0-9]{64}\.(zip|mjs|json|js))/, 'REDACTED')
       .replace(/:([A-Fa-f0-9]{64})/, ':REDACTED')
       .replace(/.*cdk-hnb659fds-container-assets-.*/, 'REDACTED')}"`;
   },
