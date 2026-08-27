@@ -2,6 +2,7 @@ import { Handler } from 'aws-lambda';
 import { App, AwsLambdaReceiver, LogLevel } from '@slack/bolt';
 import z from 'zod';
 import { getOrCreateWorkerInstance, getSession } from '@remote-swe-agents/agent-core/lib';
+import { resolveRuntimeType } from '@remote-swe-agents/agent-core/schema';
 import { makeIdempotent } from './util/idempotency';
 import { IdempotencyAlreadyInProgressError, IdempotencyConfig } from '@aws-lambda-powertools/idempotency';
 
@@ -43,7 +44,7 @@ export const handler: Handler<unknown> = async (rawEvent, context) => {
       await makeIdempotent(
         async (_: string) => {
           const session = await getSession(event.workerId);
-          const runtimeType = session?.runtimeType ?? 'agent-core';
+          const runtimeType = resolveRuntimeType(session?.runtimeType);
           const res = await getOrCreateWorkerInstance(event.workerId, runtimeType);
 
           if (res.oldStatus == 'stopped') {

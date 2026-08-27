@@ -8,10 +8,31 @@ export const defaultRuntimeType: RuntimeType = 'agent-core';
 export type AgentStatus = z.infer<typeof agentStatusSchema>;
 export type RuntimeType = z.infer<typeof runtimeTypeSchema>;
 
+export const isAgentCoreRuntimeAvailable = (): boolean => Boolean(process.env.AGENT_RUNTIME_ARN?.trim());
+
+/**
+ * Runtime for a new session when the agent does not specify one.
+ * Agent Core is preferred when it is deployed; otherwise EC2.
+ */
+export const getDefaultRuntimeType = (): RuntimeType => (isAgentCoreRuntimeAvailable() ? 'agent-core' : 'ec2');
+
+/**
+ * Coerce a requested/stored runtime type to one that can actually run.
+ * Missing type is treated as EC2 (legacy sessions). Agent Core falls back to EC2
+ * when AGENT_RUNTIME_ARN is unset (DEPLOY_BEDROCK_RUNTIME=false).
+ */
+export const resolveRuntimeType = (requested?: RuntimeType): RuntimeType => {
+  const runtimeType = requested ?? 'ec2';
+  if (runtimeType === 'agent-core' && !isAgentCoreRuntimeAvailable()) {
+    return 'ec2';
+  }
+  return runtimeType;
+};
+
 /**
  * Default agent configuration values.
  * Used by createSession (when no custom agent is specified) and by the worker's DefaultAgent definition.
- * This is the single source of truth for default runtime type and model.
+ * Preferred runtime is Agent Core; getDefaultRuntimeType() falls back to EC2 when it is not deployed.
  */
 export const defaultAgentConfig: { runtimeType: RuntimeType; defaultModel: ModelType } = {
   runtimeType: 'agent-core',

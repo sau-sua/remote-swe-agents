@@ -1,4 +1,4 @@
-import { CustomAgent, defaultAgentConfig } from '@remote-swe-agents/agent-core/schema';
+import { CustomAgent, defaultAgentConfig, getDefaultRuntimeType } from '@remote-swe-agents/agent-core/schema';
 import {
   commandExecutionTool,
   DefaultWorkingDirectory,
@@ -159,7 +159,7 @@ export const DefaultAgent: CustomAgent = {
   systemPrompt: '',
   tools: [...allOptionalTools, ...requiredToolNames],
   mcpConfig: readFileSync('./mcp.json').toString(),
-  runtimeType: defaultAgentConfig.runtimeType,
+  runtimeType: getDefaultRuntimeType(),
   createdAt: 0,
   updatedAt: 0,
 };

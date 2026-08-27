@@ -46,7 +46,7 @@ export default function NewSessionForm({
     actionProps: {
       onSuccess: (args) => {},
       onError: ({ error }) => {
-        toast.error(typeof error === 'string' ? error : 'Failed to create session');
+        toast.error(error.serverError || 'Failed to create session');
       },
     },
     formProps: {

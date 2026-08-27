@@ -212,13 +212,18 @@ export async function getOrCreateWorkerInstance(
   workerType: 'agent-core' | 'ec2' = 'ec2'
 ): Promise<{ instanceId: string; oldStatus: 'stopped' | 'terminated' | 'running'; usedCache?: boolean }> {
   if (workerType == 'agent-core') {
+    const agentRuntimeArn = process.env.AGENT_RUNTIME_ARN?.trim();
+    if (!agentRuntimeArn) {
+      throw new Error(
+        'Bedrock Agent Core is not deployed (AGENT_RUNTIME_ARN is empty). Set DEPLOY_BEDROCK_RUNTIME=true and redeploy, or use an EC2 worker.'
+      );
+    }
     // Only set 'starting' if the session is not already running
     const session = await getSession(workerId);
     const currentInstanceStatus = session?.instanceStatus;
     if (currentInstanceStatus !== 'running') {
       await updateInstanceStatus(workerId, 'starting');
     }
-    const agentRuntimeArn = process.env.AGENT_RUNTIME_ARN!;
     const res = await agentCore.send(
       new InvokeAgentRuntimeCommand({
         agentRuntimeArn,

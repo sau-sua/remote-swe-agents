@@ -24,7 +24,7 @@ import {
   searchSessionContent,
 } from '@remote-swe-agents/agent-core/lib';
 import { sendWorkerEvent, updateSessionAgentStatus, sendWebappEvent } from '@remote-swe-agents/agent-core/lib';
-import { defaultRuntimeType, MessageItem } from '@remote-swe-agents/agent-core/schema';
+import { MessageItem, resolveRuntimeType } from '@remote-swe-agents/agent-core/schema';
 
 export const sendMessageToAgent = authActionClient
   .inputSchema(sendMessageToAgentSchema)
@@ -86,7 +86,7 @@ export const sendMessageToAgent = authActionClient
 
     await sendWorkerEvent(workerId, { type: 'onMessageReceived' });
 
-    await getOrCreateWorkerInstance(workerId, session.runtimeType ?? defaultRuntimeType);
+    await getOrCreateWorkerInstance(workerId, resolveRuntimeType(session.runtimeType));
 
     return { success: true, item };
   });
@@ -107,7 +107,7 @@ export const updateAgentStatus = authActionClient
     if (status === 'completed') {
       const session = await getSession(workerId);
       if (session) {
-        await stopWorkerInstance(workerId, session.runtimeType ?? defaultRuntimeType);
+        await stopWorkerInstance(workerId, resolveRuntimeType(session.runtimeType));
       }
     }
 
@@ -126,7 +126,7 @@ export const stopSession = authActionClient.inputSchema(stopSessionSchema).actio
   if (!session) {
     throw new Error('Session not found');
   }
-  await stopWorkerInstance(workerId, session.runtimeType ?? defaultRuntimeType);
+  await stopWorkerInstance(workerId, resolveRuntimeType(session.runtimeType));
   return { success: true };
 });
 

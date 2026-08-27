@@ -6,7 +6,7 @@ import { getOrCreateWorkerInstance } from './worker-manager';
 import { renderAgentMessage, sanitizeSenderLabel } from './prompt';
 import { getCustomAgent } from './custom-agent';
 import { getPreferences } from './preferences';
-import { MessageItem, SessionItem } from '../schema';
+import { MessageItem, SessionItem, resolveRuntimeType } from '../schema';
 
 /**
  * Resolve the display name for a session's agent.
@@ -137,7 +137,7 @@ export async function sendAgentMessage(params: SendAgentMessageParams): Promise<
 
       if (!acknowledge) {
         // Wake up the target worker to process the message
-        const runtimeType = targetSession.runtimeType ?? 'agent-core';
+        const runtimeType = resolveRuntimeType(targetSession.runtimeType);
         await getOrCreateWorkerInstance(targetId, runtimeType);
         await sendWorkerEvent(targetId, { type: 'onMessageReceived' });
       }

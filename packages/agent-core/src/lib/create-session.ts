@@ -1,7 +1,7 @@
 import { TransactWriteCommand } from '@aws-sdk/lib-dynamodb';
 import { PutCommand } from '@aws-sdk/lib-dynamodb';
 import { ddb, TableName } from './aws';
-import { MessageItem, ModelType, RuntimeType, SessionItem, defaultAgentConfig } from '../schema';
+import { MessageItem, ModelType, SessionItem, getDefaultRuntimeType, resolveRuntimeType } from '../schema';
 import { getOrCreateWorkerInstance, updateInstanceStatus } from './worker-manager';
 import { sendWorkerEvent } from './events';
 import { getCustomAgent } from './custom-agent';
@@ -60,7 +60,7 @@ export const createSession = async (params: CreateSessionParams): Promise<string
     creatorSessionId,
   } = params;
   const agent = await getCustomAgent(customAgentId);
-  const runtimeType: RuntimeType = agent?.runtimeType ?? defaultAgentConfig.runtimeType;
+  const runtimeType = resolveRuntimeType(agent?.runtimeType ?? getDefaultRuntimeType());
 
   let workerId = `session-${Date.now()}`;
   if (runtimeType === 'agent-core') {
