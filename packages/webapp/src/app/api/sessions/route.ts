@@ -1,6 +1,6 @@
 import { validateApiKeyMiddleware } from '../auth/api-key';
 import { NextRequest, NextResponse } from 'next/server';
-import { createSession, getCustomAgent } from '@remote-swe-agents/agent-core/lib';
+import { createSession, getCustomAgent, getGitHubAccount } from '@remote-swe-agents/agent-core/lib';
 import { z } from 'zod';
 import { modelTypeSchema } from '@remote-swe-agents/agent-core/schema';
 
@@ -9,6 +9,7 @@ const createSessionSchema = z.object({
   message: z.string().min(1),
   modelOverride: modelTypeSchema.optional(),
   customAgentId: z.string().min(1).optional(),
+  githubAccountId: z.string().min(1).optional(),
 });
 
 export async function POST(request: NextRequest) {
@@ -30,7 +31,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Invalid request data', details: parsedBody.error.format() }, { status: 400 });
   }
 
-  const { message, modelOverride, customAgentId } = parsedBody.data;
+  const { message, modelOverride, customAgentId, githubAccountId } = parsedBody.data;
 
   if (customAgentId) {
     const agent = await getCustomAgent(customAgentId);
@@ -39,11 +40,19 @@ export async function POST(request: NextRequest) {
     }
   }
 
+  if (githubAccountId && githubAccountId !== 'DEFAULT') {
+    const account = await getGitHubAccount(githubAccountId);
+    if (!account) {
+      return NextResponse.json({ error: `GitHub account "${githubAccountId}" not found` }, { status: 400 });
+    }
+  }
+
   const workerId = await createSession({
     message,
     initiator: `rest#`,
     modelOverride,
     customAgentId,
+    githubAccountId,
   });
 
   return NextResponse.json({ sessionId: workerId }, { status: 201 });

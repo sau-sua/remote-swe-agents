@@ -8,6 +8,11 @@ export const globalPreferencesSchema = z.object({
   enableLinkInPr: z.boolean().default(false),
   defaultAgentName: z.string().default(''),
   defaultAgentIconKey: z.string().default(''),
+  /**
+   * GitHub account SK to use when a session does not specify githubAccountId.
+   * Empty string means the CDK-configured default PAT.
+   */
+  defaultGithubAccountId: z.string().default(''),
   updatedAt: z.number().default(0),
 });
 
@@ -16,6 +21,7 @@ export const updateGlobalPreferenceSchema = z.object({
   enableLinkInPr: z.boolean().optional(),
   defaultAgentName: z.string().optional(),
   defaultAgentIconKey: z.string().optional(),
+  defaultGithubAccountId: z.string().optional(),
 });
 
 export type GlobalPreferences = z.infer<typeof globalPreferencesSchema>;

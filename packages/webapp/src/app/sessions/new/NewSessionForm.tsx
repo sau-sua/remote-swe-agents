@@ -16,7 +16,9 @@ import { useState } from 'react';
 import TemplateModal from './TemplateModal';
 import {
   CustomAgent,
+  DEFAULT_GITHUB_ACCOUNT_ID,
   getAvailableModelTypes,
+  GitHubAccount,
   GlobalPreferences,
   modelConfigs,
 } from '@remote-swe-agents/agent-core/schema';
@@ -24,6 +26,7 @@ import {
 interface NewSessionFormProps {
   templates: PromptTemplate[];
   customAgents: CustomAgent[];
+  githubAccounts: GitHubAccount[];
   preferences: GlobalPreferences;
   agentIconUrls?: Record<string, string>;
 }
@@ -31,6 +34,7 @@ interface NewSessionFormProps {
 export default function NewSessionForm({
   templates,
   customAgents,
+  githubAccounts,
   preferences,
   agentIconUrls = {},
 }: NewSessionFormProps) {
@@ -56,6 +60,7 @@ export default function NewSessionForm({
         fileKeys: [],
         modelOverride: preferences.modelOverride,
         customAgentId: 'DEFAULT',
+        githubAccountId: preferences.defaultGithubAccountId || DEFAULT_GITHUB_ACCOUNT_ID,
       },
     },
   });
@@ -139,6 +144,49 @@ export default function NewSessionForm({
               )}
             />
           </div>
+
+          {githubAccounts.length > 0 && (
+            <div className="mb-4">
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                {t('githubAccount')}
+              </label>
+              <FormField
+                name="githubAccountId"
+                control={control}
+                render={({ field }) => (
+                  <Select value={field.value} onValueChange={field.onChange} disabled={isPending}>
+                    <FormControl>
+                      <SelectTrigger className="w-full">
+                        <SelectValue>
+                          {githubAccounts.find((account) => account.SK == field.value)?.name ??
+                            t('defaultGithubAccountName')}
+                        </SelectValue>
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      <SelectItem value={DEFAULT_GITHUB_ACCOUNT_ID}>
+                        <div className="flex flex-col">
+                          <span className="font-medium">{t('defaultGithubAccountName')}</span>
+                          <span className="text-sm text-gray-500">{t('defaultGithubAccountDescription')}</span>
+                        </div>
+                      </SelectItem>
+                      {githubAccounts.map((account) => (
+                        <SelectItem key={account.SK} value={account.SK}>
+                          <div className="flex flex-col">
+                            <span className="font-medium">{account.name}</span>
+                            <span className="text-sm text-gray-500">
+                              {account.gitUserName} &lt;{account.gitUserEmail}&gt;
+                            </span>
+                          </div>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
+              />
+              <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">{t('githubAccountDescription')}</p>
+            </div>
+          )}
 
           {/* Model Override Selection */}
           <div className="mb-4">

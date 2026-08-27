@@ -1,6 +1,6 @@
 import { PutCommand } from '@aws-sdk/lib-dynamodb';
 import { ddb, TableName } from '@remote-swe-agents/agent-core/aws';
-import { getCustomAgent } from '@remote-swe-agents/agent-core/lib';
+import { getCustomAgent, resolveGitHubAccountId } from '@remote-swe-agents/agent-core/lib';
 import {
   getDefaultRuntimeType,
   resolveRuntimeType,
@@ -10,6 +10,7 @@ import {
 
 export type SaveSessionInfoOptions = {
   customAgentId?: string;
+  githubAccountId?: string;
   runtimeType?: RuntimeType;
 };
 
@@ -25,6 +26,7 @@ export const saveSessionInfo = async (
   const timestamp = String(now).padStart(15, '0');
   const agent = options.customAgentId ? await getCustomAgent(options.customAgentId) : undefined;
   const runtimeType = resolveRuntimeType(options.runtimeType ?? agent?.runtimeType ?? getDefaultRuntimeType());
+  const githubAccountId = await resolveGitHubAccountId(options.githubAccountId);
 
   await ddb.send(
     new PutCommand({
@@ -45,6 +47,7 @@ export const saveSessionInfo = async (
         slackThreadTs,
         runtimeType,
         ...(agent?.SK ? { customAgentId: agent.SK } : {}),
+        ...(githubAccountId ? { githubAccountId } : {}),
       } satisfies SessionItem,
     })
   );

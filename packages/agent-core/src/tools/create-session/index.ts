@@ -23,6 +23,12 @@ const inputSchema = z.object({
     .describe(
       "ID of a custom agent to use for the new session. If omitted, the new session inherits the current session's agent configuration. Use listAgents to find available agent IDs."
     ),
+  githubAccountId: z
+    .string()
+    .optional()
+    .describe(
+      "ID of a named GitHub PAT profile to use for the new session. If omitted, the new session inherits the current session's GitHub account (or the global default)."
+    ),
   role: z
     .enum(['child', 'successor', 'independent'])
     .describe(
@@ -61,6 +67,7 @@ export const createNewSessionTool: ToolDefinition<z.infer<typeof inputSchema>> =
       message: input.message,
       initiator,
       customAgentId: input.customAgentId || currentSession.customAgentId,
+      githubAccountId: input.githubAccountId || currentSession.githubAccountId,
       title: input.title,
       agentName: input.agentName,
       parentSessionId,
@@ -123,11 +130,12 @@ The \`role\` parameter is REQUIRED. Pick the correct one:
 - You SHOULD confirm with the user before creating a session (e.g. "Shall I create a new session for this?")
 
 ## Behavior:
-- The new session inherits the current session's agent configuration (custom agent, runtime type, etc.)
+- The new session inherits the current session's agent configuration (custom agent, runtime type, GitHub PAT profile, etc.)
 - If the current session is linked to Slack, a new thread will be created in the same Slack channel
 - The new session will start processing the message immediately after creation
 - When creating child sessions, provide a descriptive 'agentName' so sibling agents can identify each other (e.g. "Frontend Dev", "Backend Dev")
-- Use 'customAgentId' to assign a specific custom agent configuration to the new session (use listAgents to find IDs)`,
+- Use 'customAgentId' to assign a specific custom agent configuration to the new session (use listAgents to find IDs)
+- Use 'githubAccountId' to assign a specific GitHub PAT profile when the new session must access different repositories`,
     inputSchema: {
       json: zodToJsonSchemaBody(inputSchema),
     },

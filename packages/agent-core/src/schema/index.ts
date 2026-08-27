@@ -9,5 +9,6 @@ export * from './api-key';
 export * from './mcp';
 export * from './model';
 export * from './preferences';
+export * from './github-account';
 export * from './push-subscription';
 export * from './unread';

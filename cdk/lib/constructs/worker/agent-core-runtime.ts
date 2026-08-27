@@ -13,6 +13,7 @@ import { join } from 'path';
 import { WorkerBus } from './bus';
 import { VapidKeys } from '../vapid-keys';
 import { EventTrigger } from './event-trigger';
+import { grantGitHubAccountParameters } from '../github-account-ssm';
 
 /**
  * Bedrock {@link CfnRuntime} validates ContainerUri with a strict pattern: the ECR repository path
@@ -134,6 +135,7 @@ export class AgentCoreRuntime extends Construct implements IGrantable {
     props.imageBucket.grantReadWrite(role);
     props.gitHubAppPrivateKeyParameter?.grantRead(role);
     props.githubPersonalAccessTokenParameter?.grantRead(role);
+    grantGitHubAccountParameters(role, Stack.of(this), ['ssm:GetParameter']);
     props.slackBotTokenParameter?.grantRead(role);
     props.anthropicApiKeyParameter?.grantRead(role);
     props.anthropicAuthTokenParameter?.grantRead(role);

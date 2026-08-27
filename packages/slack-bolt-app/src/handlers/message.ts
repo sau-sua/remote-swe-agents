@@ -7,6 +7,7 @@ import { AsyncHandlerEvent } from '../async-handler';
 import { sendWorkerEvent } from '../../../agent-core/src/lib';
 import {
   findCustomAgentByNameOrId,
+  findGitHubAccountByNameOrId,
   getWebappSessionUrl,
   sendWebappEvent,
   updateSessionLastMessage,
@@ -14,7 +15,7 @@ import {
 import { saveSessionInfo } from '../util/session';
 import { getSessionIdFromSlack } from '../util/session-map';
 import { resolveSlackDisplayName } from '../util/slack-user-cache';
-import { parseAgentDirective } from '../util/agent-directive';
+import { parseLeadingDirectives } from '../util/agent-directive';
 import { ValidationError } from '../util/error';
 
 const BotToken = process.env.BOT_TOKEN!;
@@ -40,9 +41,10 @@ export async function handleMessage(
 
   let customAgentId: string | undefined;
   let selectedAgentName: string | undefined;
+  let githubAccountId: string | undefined;
 
   if (isThreadRoot) {
-    const parsed = parseAgentDirective(message);
+    const parsed = parseLeadingDirectives(message);
     if (parsed.agentRef) {
       const resolved = await findCustomAgentByNameOrId(parsed.agentRef);
       if (resolved.candidates?.length) {
@@ -61,6 +63,26 @@ export async function handleMessage(
       }
       customAgentId = resolved.agent.SK;
       selectedAgentName = resolved.agent.name;
+    }
+    if (parsed.githubAccountRef) {
+      const resolved = await findGitHubAccountByNameOrId(parsed.githubAccountRef);
+      if (resolved.candidates?.length) {
+        const names = resolved.candidates.map((a) => `• ${a.name} (\`${a.SK}\`)`).join('\n');
+        throw new ValidationError(
+          `Multiple GitHub accounts match "${parsed.githubAccountRef}". Specify the account ID instead:\n${names}`
+        );
+      }
+      if (!resolved.account) {
+        throw new ValidationError(
+          `GitHub account "${parsed.githubAccountRef}" not found. Add it in Preferences, or omit the github: directive to use the default PAT.`
+        );
+      }
+      githubAccountId = resolved.account.SK;
+    }
+    if (parsed.agentRef || parsed.githubAccountRef) {
+      if (!parsed.message) {
+        throw new ValidationError('Missing task message after session directives.');
+      }
       message = parsed.message;
     }
   }
@@ -131,7 +153,9 @@ export async function handleMessage(
 
   // Save session info only when starting a new thread
   if (event.thread_ts === undefined) {
-    promises.push(saveSessionInfo(workerId, message, userId, event.channel, event.ts, { customAgentId }));
+    promises.push(
+      saveSessionInfo(workerId, message, userId, event.channel, event.ts, { customAgentId, githubAccountId })
+    );
   }
 
   const agentTipElements = selectedAgentName
