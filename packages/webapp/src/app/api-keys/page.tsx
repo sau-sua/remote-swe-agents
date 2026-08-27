@@ -47,7 +47,8 @@ export default async function ApiKeysPage() {
 {
   "message": "Your initial message to the agent",
   "modelOverride": ${modelTypeList.join(' | ') + ' | undefined'},
-  "customAgentId": "optional-custom-agent-id"
+  "customAgentId": "optional-custom-agent-id",
+  "githubAccountId": "optional-github-account-id"
 }`}</code>
                     </pre>
                     <p className="text-gray-600 dark:text-gray-300 mt-2">{documentationT('createSessionReturns')}</p>

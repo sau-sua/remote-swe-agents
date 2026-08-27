@@ -7,6 +7,7 @@ export const createNewWorkerSchema = z.object({
   fileKeys: z.array(z.string()).optional(),
   modelOverride: modelTypeSchema.optional(),
   customAgentId: z.string().optional(),
+  githubAccountId: z.string().optional(),
 });
 
 export const promptTemplateSchema = z.object({

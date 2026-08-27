@@ -48,6 +48,7 @@ describe('createNewSessionTool handler', () => {
       SK: 'session-parent-123',
       workerId: 'session-parent-123',
       initiator: 'webapp#user-1',
+      githubAccountId: 'acc-work',
     });
 
     const result = await createNewSessionTool.handler({ message: 'sub-task', role: 'child' }, context);
@@ -56,6 +57,7 @@ describe('createNewSessionTool handler', () => {
     const params = mockCreateSession.mock.calls[0][0];
     expect(params.parentSessionId).toBe('session-parent-123');
     expect(params.creatorSessionId).toBeUndefined();
+    expect(params.githubAccountId).toBe('acc-work');
     expect(result).toContain('session-child-456');
     expect(result).toContain('Parent Session: session-parent-123');
   });

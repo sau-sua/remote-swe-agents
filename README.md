@@ -143,6 +143,16 @@ To interact with GitHub, you need to setup GitHub integration. You have two opti
 > [!NOTE]
 > If you want to share the system with multiple developers, it is recommended to create a [machine user account for GitHub](https://docs.github.com/en/get-started/learning-about-github/types-of-github-accounts#user-accounts) instead of using your own account's PAT, to prevent misuse of personal privileges.
 
+##### Multiple GitHub accounts (optional)
+
+The SSM parameter above is the **default** PAT. If you have a second GitHub account that can access different repositories, add it from the webapp **Preferences → GitHub Accounts** page after deploy (the token is stored in `/remote-swe/github/accounts/<id>`).
+
+- New sessions use the default PAT unless you pick another account on the new-session form (or pass `githubAccountId` to the HTTP API).
+- You can mark one named account as the default for new sessions.
+- Slack: omit the account to use the default, or start a thread with `github:<account-name> <message>`.
+
+A CDK redeploy is required once so worker and webapp roles can read/write `/remote-swe/github/accounts/*`.
+
 #### Option 3B: GitHub App
 
 1. Go to [GitHub Settings > Developer settings > GitHub Apps](https://github.com/settings/apps)

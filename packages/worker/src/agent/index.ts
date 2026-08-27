@@ -31,6 +31,7 @@ import { getMcpToolSpecs, tryExecuteMcpTool } from './mcp';
 import {
   allTools,
   isGitHubConfigured,
+  applyGitHubCredentialsForSession,
   requiredToolNames,
   gitHubTools,
   reportProgressTool,
@@ -68,6 +69,7 @@ export const shouldResetReportTimer = (toolName: string | undefined): boolean =>
 
 const agentLoop = async (workerId: string, cancellationToken: CancellationToken) => {
   const session = await getSession(workerId);
+  await applyGitHubCredentialsForSession(session);
   const customAgent = (await getCustomAgent(session?.customAgentId)) ?? DefaultAgent;
   const globalPreferences = await getPreferences();
   // Worker mcp.json is the shared base for every agent. Custom agent mcpConfig overlays it

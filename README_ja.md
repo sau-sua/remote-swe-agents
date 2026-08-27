@@ -141,6 +141,16 @@ GitHubと連携するには、GitHub統合のセットアップが必要です�
 > [!NOTE]
 > システムを複数の開発者と共有したい場合、個人の権限の悪用を防ぐために、自分のアカウントのPATを使用するのではなく、[GitHubのマシンユーザーアカウント](https://docs.github.com/en/get-started/learning-about-github/types-of-github-accounts#user-accounts)を作成することをお勧めします。
 
+##### 複数のGitHubアカウント（オプション）
+
+上記のSSMパラメータは**デフォルト**のPATです。アクセスできるリポジトリが異なる2つ目のGitHubアカウントがある場合は、デプロイ後に Web アプリの **設定 → GitHubアカウント** から追加してください（トークンは `/remote-swe/github/accounts/<id>` に保存されます）。
+
+- 新規セッションは、作成画面で別アカウントを選ばない限り（または HTTP API の `githubAccountId`）デフォルトPATを使います。
+- 名前付きアカウントの1つを、新規セッションのデフォルトにできます。
+- Slack: 指定しなければデフォルトを使い、スレッド開始時に `github:<アカウント名> <メッセージ>` と書くと切り替えられます。
+
+ワーカーと Web アプリが `/remote-swe/github/accounts/*` を読み書きできるように、CDKの再デプロイが1回必要です。
+
 #### オプション3B：GitHub App
 
 1. [GitHub設定 > 開発者設定 > GitHub Apps](https://github.com/settings/apps)にアクセス
