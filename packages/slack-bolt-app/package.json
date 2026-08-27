@@ -8,7 +8,7 @@
     "bundle": "esbuild src/lambda.ts src/async-handler.ts src/local.ts --bundle --outdir=dist --platform=node --charset=utf8",
     "format": "prettier --write './**/*.ts'",
     "format:check": "prettier --check './**/*.ts'",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "vitest run"
   },
   "dependencies": {
     "@aws-crypto/sha256-js": "^5.2.0",
@@ -32,6 +32,7 @@
     "esbuild": "^0.28.1",
     "prettier": "^3.3.3",
     "tsx": "^4.19.2",
-    "typescript": "^5.6.3"
+    "typescript": "^5.6.3",
+    "vitest": "^3.1.1"
   }
 }

@@ -27,6 +27,28 @@ export const getCustomAgent = async (customAgentId: string | undefined): Promise
   return res.Item as CustomAgent | undefined;
 };
 
+/**
+ * Resolve a custom agent by exact ID or case-insensitive exact name.
+ * When multiple agents share the same name, returns those candidates without picking one.
+ */
+export const findCustomAgentByNameOrId = async (
+  nameOrId: string
+): Promise<{ agent?: CustomAgent; candidates?: CustomAgent[] }> => {
+  const trimmed = nameOrId.trim();
+  if (!trimmed) return {};
+
+  const byId = await getCustomAgent(trimmed);
+  if (byId) return { agent: byId };
+
+  const agents = await getCustomAgents(100);
+  const normalized = trimmed.toLowerCase();
+  const matches = agents.filter((agent) => agent.name.trim().toLowerCase() === normalized);
+
+  if (matches.length === 1) return { agent: matches[0] };
+  if (matches.length > 1) return { candidates: matches };
+  return {};
+};
+
 export const getCustomAgents = async (limit: number = 50): Promise<CustomAgent[]> => {
   const res = await ddb.send(
     new QueryCommand({

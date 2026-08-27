@@ -5,6 +5,7 @@ import { handleDumpHistory } from './handlers/dump-history';
 import { handleApproveUser } from './handlers/approve-user';
 import { handleMessage } from './handlers/message';
 import { handleTakeOver } from './handlers/take-over';
+import { handleListAgents } from './handlers/list-agents';
 import { IdempotencyAlreadyInProgressError } from '@aws-lambda-powertools/idempotency';
 import { WebClient } from '@slack/web-api';
 import { NonRetryableError } from './util/error';
@@ -74,6 +75,8 @@ async function processMessage(
           await handleDumpHistory(event, client);
         } else if (message.toLowerCase().startsWith('take_over')) {
           await handleTakeOver(event, client);
+        } else if (message.toLowerCase().startsWith('list_agents')) {
+          await handleListAgents(event, client);
         } else {
           await handleMessage(event, client);
         }

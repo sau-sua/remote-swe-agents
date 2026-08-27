@@ -5,10 +5,17 @@ import { s3, BucketName } from '@remote-swe-agents/agent-core/aws';
 import { PutObjectCommand } from '@aws-sdk/client-s3';
 import { AsyncHandlerEvent } from '../async-handler';
 import { sendWorkerEvent } from '../../../agent-core/src/lib';
-import { getWebappSessionUrl, sendWebappEvent, updateSessionLastMessage } from '@remote-swe-agents/agent-core/lib';
+import {
+  findCustomAgentByNameOrId,
+  getWebappSessionUrl,
+  sendWebappEvent,
+  updateSessionLastMessage,
+} from '@remote-swe-agents/agent-core/lib';
 import { saveSessionInfo } from '../util/session';
 import { getSessionIdFromSlack } from '../util/session-map';
 import { resolveSlackDisplayName } from '../util/slack-user-cache';
+import { parseAgentDirective } from '../util/agent-directive';
+import { ValidationError } from '../util/error';
 
 const BotToken = process.env.BOT_TOKEN!;
 const lambda = new LambdaClient();
@@ -26,10 +33,37 @@ export async function handleMessage(
   },
   client: WebClient
 ): Promise<void> {
-  const message = event.text.replace(/<@[A-Z0-9]+>\s*/g, '').trim();
+  let message = event.text.replace(/<@[A-Z0-9]+>\s*/g, '').trim();
   const userId = event.user ?? '';
   const channel = event.channel;
   const isThreadRoot = event.thread_ts == null;
+
+  let customAgentId: string | undefined;
+  let selectedAgentName: string | undefined;
+
+  if (isThreadRoot) {
+    const parsed = parseAgentDirective(message);
+    if (parsed.agentRef) {
+      const resolved = await findCustomAgentByNameOrId(parsed.agentRef);
+      if (resolved.candidates?.length) {
+        const names = resolved.candidates.map((a) => `• ${a.name} (\`${a.SK}\`)`).join('\n');
+        throw new ValidationError(
+          `Multiple custom agents match "${parsed.agentRef}". Specify the agent ID instead:\n${names}`
+        );
+      }
+      if (!resolved.agent) {
+        throw new ValidationError(
+          `Custom agent "${parsed.agentRef}" not found. Send \`list_agents\` to see available agents.`
+        );
+      }
+      if (!parsed.message) {
+        throw new ValidationError(`Missing task message. Usage: \`agent:${parsed.agentRef} <your message>\``);
+      }
+      customAgentId = resolved.agent.SK;
+      selectedAgentName = resolved.agent.name;
+      message = parsed.message;
+    }
+  }
 
   const workerId = await getSessionIdFromSlack(channel, event.thread_ts ?? event.ts, isThreadRoot);
 
@@ -97,8 +131,21 @@ export async function handleMessage(
 
   // Save session info only when starting a new thread
   if (event.thread_ts === undefined) {
-    promises.push(saveSessionInfo(workerId, message, userId, event.channel, event.ts));
+    promises.push(saveSessionInfo(workerId, message, userId, event.channel, event.ts, { customAgentId }));
   }
+
+  const agentTipElements = selectedAgentName
+    ? [
+        { type: 'text', text: 'Using custom agent: ' },
+        { type: 'text', text: selectedAgentName, style: { bold: true } },
+      ]
+    : [
+        { type: 'text', text: 'Start with ' },
+        { type: 'text', text: 'agent:<name-or-id> <message>', style: { code: true } },
+        { type: 'text', text: ' to use a custom agent. Send ' },
+        { type: 'text', text: 'list_agents', style: { code: true } },
+        { type: 'text', text: ' to see available agents.' },
+      ];
 
   await Promise.all([
     ...promises,
@@ -124,6 +171,10 @@ export async function handleMessage(
                   style: 'bullet',
                   indent: 0,
                   elements: [
+                    {
+                      type: 'rich_text_section',
+                      elements: agentTipElements,
+                    },
                     ...(sessionUrl
                       ? [
                           {

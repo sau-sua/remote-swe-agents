@@ -366,6 +366,7 @@ After successful deployment, you can access the Remote SWE Agents system through
    - Direct integration with your Slack workspace
    - Thread-based conversations with agents
    - Real-time progress updates
+   - To use a custom agent, start a new thread with `agent:<name-or-id> <message>` (send `list_agents` to see available agents)
 
 3. **API Access**: Use the RESTful API endpoints for programmatic integration
    - Session creation and management
@@ -420,6 +421,21 @@ You can configure global settings for all agents through the deployed web UI. Th
 2. **Common Agent Prompt**: Configure a shared system prompt that will be used by all agents. This is useful for setting organization-wide coding standards, preferred libraries, or specific instructions that should apply to all development tasks.
 
 To access these settings, navigate to the preferences page in your deployed webapp interface.
+
+### Custom Agents from Slack
+
+You can create specialized agents (custom system prompts, tools, MCP configs, runtime) from the Web UI **Custom Agents** page. To start a session with one of them from Slack:
+
+1. Send `list_agents` to see available agents and their IDs
+2. Start a **new thread** with an agent directive at the beginning of your message:
+
+```
+@remote-swe agent:CodeReviewer Please review https://github.com/org/repo/pull/123
+```
+
+Names with spaces can be quoted: `agent:"Code Reviewer" ...`. You can also use the agent ID shown by `list_agents`.
+
+If no `agent:` directive is provided, the default agent configuration is used.
 
 ### Integrating with MCP Servers
 
