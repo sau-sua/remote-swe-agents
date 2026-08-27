@@ -8,7 +8,7 @@ import {
   allOptionalTools,
   requiredToolNames,
 } from '@remote-swe-agents/agent-core/tools';
-import { readFileSync } from 'fs';
+import { loadWorkerMcpConfig } from './mcp-config';
 
 /**
  * Essential system prompt that is ALWAYS included regardless of custom agent configuration.
@@ -158,7 +158,7 @@ export const DefaultAgent: CustomAgent = {
   defaultModel: defaultAgentConfig.defaultModel,
   systemPrompt: '',
   tools: [...allOptionalTools, ...requiredToolNames],
-  mcpConfig: readFileSync('./mcp.json').toString(),
+  mcpConfig: JSON.stringify(loadWorkerMcpConfig().config),
   runtimeType: getDefaultRuntimeType(),
   createdAt: 0,
   updatedAt: 0,

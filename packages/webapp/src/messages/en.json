@@ -432,7 +432,7 @@
       "mcpConfig": {
         "label": "MCP Configuration",
         "placeholder": "Enter MCP configuration JSON (optional)",
-        "description": "Optional MCP (Model Context Protocol) configuration for advanced integrations",
+        "description": "Optional extra MCP servers. Merged with packages/worker/mcp.json; entries here override the shared file by server name. Leave empty to use only mcp.json.",
         "formatJson": "Format JSON",
         "formatSuccess": "JSON formatted successfully",
         "formatError": "Invalid JSON format"

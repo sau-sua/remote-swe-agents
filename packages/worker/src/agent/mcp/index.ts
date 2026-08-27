@@ -1,33 +1,45 @@
 import { MCPClient } from './mcp-client';
 import { Tool } from '@aws-sdk/client-bedrock-runtime';
 import { McpConfig } from '@remote-swe-agents/agent-core/schema';
+import { sendSystemMessage } from '@remote-swe-agents/agent-core/lib';
 
 let clientsMap: { [key: string]: { name: string; client: MCPClient }[] } = {};
 
 const initMcp = async (workerId: string, config: McpConfig) => {
+  const failures: string[] = [];
   clientsMap[workerId] = (
     await Promise.all(
       Object.entries(config.mcpServers)
-        .filter(([, config]) => config.enabled !== false)
-        .map(async ([name, config]) => {
+        .filter(([, serverConfig]) => serverConfig.enabled !== false)
+        .map(async ([name, serverConfig]) => {
           try {
             let client: MCPClient;
-            if ('command' in config) {
-              client = await MCPClient.fromCommand(config.command, config.args, config.env);
+            if ('command' in serverConfig) {
+              client = await MCPClient.fromCommand(serverConfig.command, serverConfig.args, serverConfig.env);
             } else {
-              client = await MCPClient.fromUrl(config.url);
+              client = await MCPClient.fromUrl(serverConfig.url);
             }
             return { name, client };
           } catch (e) {
-            console.log(`MCP server ${name} failed to start: ${e}. Ignoring the server...`);
+            const message = `MCP server ${name} failed to start: ${e}`;
+            console.error(message);
+            failures.push(message);
           }
         })
     )
   ).filter((c) => c != null);
+
+  if (failures.length > 0) {
+    await sendSystemMessage(
+      workerId,
+      `Some MCP servers could not be started:\n${failures.join('\n')}\nOther tools remain available.`
+    );
+  }
 };
 
 export const getMcpToolSpecs = async (workerId: string, config: McpConfig): Promise<Tool[]> => {
-  if (Object.keys(config.mcpServers).length == 0) return [];
+  const enabledServers = Object.entries(config.mcpServers).filter(([, serverConfig]) => serverConfig.enabled !== false);
+  if (enabledServers.length == 0) return [];
   if (!clientsMap[workerId]) {
     await initMcp(workerId, config);
   }
@@ -57,4 +69,10 @@ export const closeMcpServers = async () => {
       })
     )
   );
+  clientsMap = {};
+};
+
+/** @internal test helper */
+export const resetMcpClients = () => {
+  clientsMap = {};
 };
