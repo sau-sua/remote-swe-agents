@@ -44,7 +44,8 @@ import { CancellationToken } from '../common/cancellation-token';
 import { updateAgentStatusWithEvent } from '../common/status';
 import { refreshSession } from '../common/refresh-session';
 import { DefaultAgent, getEssentialSystemPrompt, getDefaultKnowledgePrompt } from './lib/default-agent';
-import { EmptyMcpConfig, mcpConfigSchema, modelConfigs, ModelType } from '@remote-swe-agents/agent-core/schema';
+import { mergeMcpConfigs, modelConfigs, ModelType, parseMcpConfig } from '@remote-swe-agents/agent-core/schema';
+import { loadWorkerMcpConfig } from './lib/mcp-config';
 
 /**
  * Tool names that should reset the lastReportedTime timer.
@@ -69,18 +70,20 @@ const agentLoop = async (workerId: string, cancellationToken: CancellationToken)
   const session = await getSession(workerId);
   const customAgent = (await getCustomAgent(session?.customAgentId)) ?? DefaultAgent;
   const globalPreferences = await getPreferences();
-  let mcpConfig = EmptyMcpConfig;
-  {
-    const { data, error } = mcpConfigSchema.safeParse(JSON.parse(customAgent.mcpConfig));
-    if (error) {
-      sendSystemMessage(
-        workerId,
-        `Invalid mcp config: ${error}. Please check the agent configuration for ${customAgent.name}`
-      );
-    } else {
-      mcpConfig = data;
-    }
+  // Worker mcp.json is the shared base for every agent. Custom agent mcpConfig overlays it
+  // (same server name wins). Custom agents used to replace mcp.json entirely with {}.
+  const workerMcp = loadWorkerMcpConfig();
+  if (workerMcp.error) {
+    await sendSystemMessage(workerId, workerMcp.error);
   }
+  const { data: agentMcpConfig, error: agentMcpError } = parseMcpConfig(customAgent.mcpConfig || '{}');
+  if (agentMcpError) {
+    await sendSystemMessage(
+      workerId,
+      `Invalid mcp config: ${agentMcpError}. Please check the agent configuration for ${customAgent.name}`
+    );
+  }
+  const mcpConfig = mergeMcpConfigs(workerMcp.config, agentMcpConfig);
 
   // For session title generation
   const { items: allItems, slackUserId } = await pRetry(

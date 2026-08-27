@@ -26,7 +26,9 @@ const agentFieldsSchema = z.object({
   mcpConfig: z
     .string()
     .default('{"mcpServers":{}}')
-    .describe('MCP server configuration as JSON string. Default: {"mcpServers":{}}'),
+    .describe(
+      'Additional MCP servers as a JSON string. Merged with packages/worker/mcp.json (same server name wins). Default {"mcpServers":{}} uses only mcp.json.'
+    ),
   runtimeType: runtimeTypeSchema.describe('The runtime type for the agent: "ec2" or "agent-core".'),
   includeDefaultKnowledge: z
     .boolean()

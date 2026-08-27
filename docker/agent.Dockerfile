@@ -52,5 +52,8 @@ COPY ./ ./
 RUN cd packages/agent-core && npm run build
 
 WORKDIR /app/packages/worker
+# Chromium is required by the playwright MCP server registered in mcp.json.
+# EC2 workers install this in userData; Agent Core must bake it into the image.
+RUN npx playwright install --with-deps chromium
 EXPOSE 8080
 CMD ["./run.sh"]

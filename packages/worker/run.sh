@@ -20,4 +20,7 @@ if [ -n "$SLACK_BOT_TOKEN_PARAMETER_NAME" ]; then
   export SLACK_BOT_TOKEN=$(aws ssm get-parameter --name $SLACK_BOT_TOKEN_PARAMETER_NAME --region ${AWS_REGION} --query "Parameter.Value" --output text 2>/dev/null || echo "")
 fi
 
+# Ensure uv/uvx (installed to ~/.local/bin) stay on PATH even if the runtime resets it.
+export PATH="${HOME}/.local/bin:/root/.local/bin:${PATH}"
+
 exec npx tsx src/agent-core.ts
