@@ -60,9 +60,7 @@ describe('findCustomAgentByNameOrId', () => {
   });
 
   test('returns empty result when nothing matches', async () => {
-    mockSend
-      .mockResolvedValueOnce({ Item: undefined })
-      .mockResolvedValueOnce({ Items: [makeAgent('id1', 'Other')] });
+    mockSend.mockResolvedValueOnce({ Item: undefined }).mockResolvedValueOnce({ Items: [makeAgent('id1', 'Other')] });
 
     const result = await findCustomAgentByNameOrId('missing');
     expect(result).toEqual({});
