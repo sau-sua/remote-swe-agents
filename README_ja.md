@@ -102,6 +102,19 @@ aws ssm put-parameter \
 
 `your-claude-code-oauth-token-here`を `claude setup-token` で取得したトークン（通常は `sk-ant-oat01-...` で始まる）に置き換えてください。
 
+**オプション：OpenAI Codexを使用する場合**
+
+Bedrock / Anthropicモデルに加えて GPT-5.3 Codex を使えるようにするには、OpenAI APIキー用のSSMパラメータを作成します：
+
+```bash
+aws ssm put-parameter \
+    --name /remote-swe/openai/api-key \
+    --value "your-openai-api-key-here" \
+    --type String
+```
+
+`your-openai-api-key-here` を [OpenAI ダッシュボード](https://platform.openai.com/api-keys) で発行したキー（通常は `sk-...` で始まる）に置き換えてください。
+
 ### ステップ3：GitHub統合のセットアップ
 
 GitHubと連携するには、GitHub統合のセットアップが必要です。GitHub統合には2つの選択肢があります：
@@ -231,6 +244,16 @@ CLAUDE_CODE_OAUTH_TOKEN=sk-ant-oat01-your-oauth-token-here
 
 > [!NOTE]
 > `LLM_PROVIDER=anthropic`を使用する場合、AWS Bedrockの設定（`BEDROCK_CRI_REGION_OVERRIDE`など）は無視されます。トークン使用量の追跡とコスト計算は、DynamoDBで引き続き正常に機能します。
+
+#### OpenAI Codexを使用する場合：
+
+Bedrock や Anthropic のモデルに加えて GPT-5.3 Codex を有効にするには、`.env.local` に以下を追加します：
+
+```sh
+OPENAI_API_KEY=sk-your-openai-api-key-here
+```
+
+`OPENAI_API_KEY`（または `OPENAPI_KEY`）が空でなければ、SSMパラメータ `/remote-swe/openai/api-key` を参照します。実際のキーはSSMに保存してください（ステップ2参照）。デプロイ後、セッションのモデル選択に Codex が表示されます。
 
 > [!NOTE]
 > ここでは、GitHub Actions変数から設定を注入するために環境変数を使用しています。これが便利でない場合は、[`bin/cdk.ts`](cdk/bin/cdk.ts)内の値を直接ハードコードすることもできます。

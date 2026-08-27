@@ -92,6 +92,11 @@ export interface MainStackProps extends cdk.StackProps {
   readonly anthropicAuthTokenParameterName?: string;
 
   /**
+   * OpenAI API key parameter name. When set, GPT-5.3 Codex is available as a model.
+   */
+  readonly openaiApiKeyParameterName?: string;
+
+  /**
    * Deploy Bedrock Agent Core Runtime. Set to false to use Claude via Anthropic only (avoids Bedrock agent limit).
    * @default false
    */
@@ -177,6 +182,13 @@ export class MainStack extends cdk.Stack {
         })
       : undefined;
 
+    const openaiApiKeyParameter = props.openaiApiKeyParameterName
+      ? StringParameter.fromStringParameterAttributes(this, 'OpenAIApiKey', {
+          parameterName: props.openaiApiKeyParameterName,
+          forceDynamicReference: true,
+        })
+      : undefined;
+
     const auth = new Auth(this, 'Auth', {
       hostedZone,
       sharedCertificate: props.sharedCertificate,
@@ -220,6 +232,7 @@ export class MainStack extends cdk.Stack {
       llmProvider: props.llmProvider,
       anthropicApiKeyParameter,
       anthropicAuthTokenParameter,
+      openaiApiKeyParameter,
       deployBedrockRuntime: props.deployBedrockRuntime,
       workerInstanceType: props.workerInstanceType,
       userPool: auth.userPool,
@@ -250,6 +263,7 @@ export class MainStack extends cdk.Stack {
       workerUseSpot: props.workerUseSpot,
       workerTerminateOnSessionEnd: props.workerTerminateOnSessionEnd,
       slackOnlySessionCreation: props.slackOnlySessionCreation,
+      openaiEnabled: Boolean(openaiApiKeyParameter),
       vapidKeys,
     });
 

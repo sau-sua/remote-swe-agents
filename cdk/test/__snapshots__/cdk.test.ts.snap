@@ -5943,7 +5943,11 @@ phases:
 
               export ANTHROPIC_API_KEY=\\"\\"
 
-              export ANTHROPIC_AUTH_TOKEN=\\"\\"
+              export CLAUDE_CODE_OAUTH_TOKEN=\\"\\"
+
+              export ANTHROPIC_AUTH_TOKEN=\\"$CLAUDE_CODE_OAUTH_TOKEN\\"
+
+              export OPENAI_API_KEY=\\"\\"
 
               export GITHUB_PERSONAL_ACCESS_TOKEN=\\"\\"
 
@@ -6067,7 +6071,11 @@ phases:
 
               Environment=ANTHROPIC_API_KEY_PARAMETER_NAME=
 
+              Environment=CLAUDE_CODE_OAUTH_TOKEN_PARAMETER_NAME=
+
               Environment=ANTHROPIC_AUTH_TOKEN_PARAMETER_NAME=
+
+              Environment=OPENAI_API_KEY_PARAMETER_NAME=
 
               Environment=VAPID_PUBLIC_KEY_PARAMETER_NAME=",
               {
@@ -6778,7 +6786,11 @@ phases:
 
               export ANTHROPIC_API_KEY=\\"\\"
 
-              export ANTHROPIC_AUTH_TOKEN=\\"\\"
+              export CLAUDE_CODE_OAUTH_TOKEN=\\"\\"
+
+              export ANTHROPIC_AUTH_TOKEN=\\"$CLAUDE_CODE_OAUTH_TOKEN\\"
+
+              export OPENAI_API_KEY=\\"\\"
 
               export GITHUB_PERSONAL_ACCESS_TOKEN=\\"\\"
 
@@ -6902,7 +6914,11 @@ phases:
 
               Environment=ANTHROPIC_API_KEY_PARAMETER_NAME=
 
+              Environment=CLAUDE_CODE_OAUTH_TOKEN_PARAMETER_NAME=
+
               Environment=ANTHROPIC_AUTH_TOKEN_PARAMETER_NAME=
+
+              Environment=OPENAI_API_KEY_PARAMETER_NAME=
 
               Environment=VAPID_PUBLIC_KEY_PARAMETER_NAME=",
               {
@@ -7312,7 +7328,9 @@ TOKEN=$(curl -s -X PUT "http://169.254.169.254/latest/api/token" -H "X-aws-ec2-m
 export WORKER_ID=$(curl -s -H "X-aws-ec2-metadata-token: $TOKEN" http://169.254.169.254/latest/meta-data/tags/instance/RemoteSweWorkerId)
 export SLACK_BOT_TOKEN=$(aws ssm get-parameter --name /remote-swe/slack/bot-token --region us-east-1 --query "Parameter.Value" --output text 2>/dev/null || echo "")
 export ANTHROPIC_API_KEY=""
-export ANTHROPIC_AUTH_TOKEN=""
+export CLAUDE_CODE_OAUTH_TOKEN=""
+export ANTHROPIC_AUTH_TOKEN="$CLAUDE_CODE_OAUTH_TOKEN"
+export OPENAI_API_KEY=""
 export GITHUB_PERSONAL_ACCESS_TOKEN=""
 
 # Fetch VAPID keys from SSM if configured
@@ -7387,7 +7405,9 @@ Environment=BEDROCK_AWS_ROLE_NAME=
 Environment=BEDROCK_CRI_REGION_OVERRIDE=global
 Environment=LLM_PROVIDER=bedrock
 Environment=ANTHROPIC_API_KEY_PARAMETER_NAME=
+Environment=CLAUDE_CODE_OAUTH_TOKEN_PARAMETER_NAME=
 Environment=ANTHROPIC_AUTH_TOKEN_PARAMETER_NAME=
+Environment=OPENAI_API_KEY_PARAMETER_NAME=
 Environment=VAPID_PUBLIC_KEY_PARAMETER_NAME=",
                   {
                     "Ref": "VapidKeysPublicKeyCCE9E4A7",
@@ -7497,7 +7517,7 @@ EOF
 systemctl daemon-reload
 systemctl enable fluent-bit
 systemctl enable myapp
-
+      
 systemctl start fluent-bit
 systemctl start myapp",
                 ],

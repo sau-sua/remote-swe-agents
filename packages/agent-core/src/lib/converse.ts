@@ -8,14 +8,15 @@ import {
 import { AssumeRoleCommand, STSClient } from '@aws-sdk/client-sts';
 import { ddb, TableName } from './aws';
 import { GetCommand, PutCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
-import { criRegion, modelConfigs, ModelType } from '../schema';
+import { criRegion, isOpenAIModel, modelConfigs, ModelType } from '../schema';
 import { anthropicConverse } from './anthropic-client';
+import { openaiConverse } from './openai-client';
 
 const sts = new STSClient();
 const awsAccounts = (process.env.BEDROCK_AWS_ACCOUNTS ?? '').split(',');
 const roleName = process.env.BEDROCK_AWS_ROLE_NAME || 'bedrock-remote-swe-role';
 
-// LLM Provider configuration
+// LLM Provider configuration. OpenAI Codex is selected per-model, not via this flag.
 const LLM_PROVIDER = process.env.LLM_PROVIDER || 'bedrock'; // 'bedrock' or 'anthropic'
 export const deepMerge = (...objects: Record<string, unknown>[]): Record<string, unknown> => {
   const result: Record<string, unknown> = {};
@@ -56,13 +57,17 @@ export const converse = async (
   input: Omit<ConverseCommandInput, 'modelId'>,
   maxTokensExceededCount = 0
 ): Promise<{ response: ConverseResponse; thinkingBudget?: number }> => {
+  const openaiTypes = modelTypes.filter((type) => isOpenAIModel(type));
+  if (openaiTypes.length > 0) {
+    return openaiConverse(workerId, openaiTypes, input, maxTokensExceededCount);
+  }
   if (LLM_PROVIDER === 'anthropic') {
     return anthropicConverse(workerId, modelTypes, input, maxTokensExceededCount);
-  } else if (LLM_PROVIDER === 'bedrock') {
-    return bedrockConverse(workerId, modelTypes, input, maxTokensExceededCount);
-  } else {
-    throw new Error(`Unknown LLM_PROVIDER: ${LLM_PROVIDER}. Must be 'bedrock' or 'anthropic'`);
   }
+  if (LLM_PROVIDER === 'bedrock') {
+    return bedrockConverse(workerId, modelTypes, input, maxTokensExceededCount);
+  }
+  throw new Error(`Unknown LLM_PROVIDER: ${LLM_PROVIDER}. Must be 'bedrock' or 'anthropic'`);
 };
 
 // Bedrock-specific implementation

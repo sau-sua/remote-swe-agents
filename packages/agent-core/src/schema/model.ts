@@ -3,6 +3,7 @@ import { z } from 'zod';
 export const modelTypeList = [
   'opus5',
   'sonnet5',
+  'gpt-5.3-codex',
   'sonnet4.6',
   'sonnet4.6-long-context-mode',
   'opus4.8',
@@ -49,6 +50,9 @@ const modelConfigSchema = z.object({
   // "This model does not support assistant message prefill"). When false, a
   // trailing assistant message is stripped from the request before invoke.
   assistantPrefillSupport: z.boolean().optional(),
+  // Omitted / 'bedrock' = Bedrock or Anthropic Claude models. 'openai' is routed
+  // to the OpenAI Responses API (Codex) when an API key is configured.
+  provider: z.enum(['bedrock', 'openai']).optional(),
   supportedCriProfiles: z.array(criRegionSchema),
   additionalRequestFields: z.record(z.string(), z.unknown()).optional(),
   pricing: z.object({
@@ -77,6 +81,21 @@ export const modelConfigs: Record<ModelType, z.infer<typeof modelConfigSchema>> 
     assistantPrefillSupport: false,
     supportedCriProfiles: ['global', 'us', 'eu', 'au'],
     pricing: { input: 0.005, output: 0.025, cacheRead: 0.0005, cacheWrite: 0.00625 },
+  },
+  'gpt-5.3-codex': {
+    name: 'GPT-5.3 Codex',
+    modelId: 'gpt-5.3-codex',
+    maxOutputTokens: 128_000,
+    maxInputTokens: 400_000,
+    cacheSupport: [],
+    reasoningSupport: true,
+    toolChoiceSupport: ['any', 'auto', 'tool'],
+    assistantPrefillSupport: false,
+    provider: 'openai',
+    // CRI is unused for OpenAI; listed so the schema stays consistent.
+    supportedCriProfiles: ['global', 'us', 'eu', 'apac', 'jp', 'au'],
+    // OpenAI pricing is $/1M tokens; this codebase stores $/1K.
+    pricing: { input: 0.00175, output: 0.014, cacheRead: 0.000175, cacheWrite: 0.00175 },
   },
   sonnet5: {
     name: 'Claude Sonnet 5',
@@ -366,8 +385,20 @@ export const modelConfigs: Record<ModelType, z.infer<typeof modelConfigSchema>> 
   },
 };
 
+export const isOpenAIModel = (modelType: ModelType): boolean => modelConfigs[modelType]?.provider === 'openai';
+
 export const getAvailableModelTypes = (): ModelType[] => {
   return Object.entries(modelConfigs)
-    .filter(([_, config]) => !config.isHidden && config.supportedCriProfiles.includes(criRegion))
+    .filter(([_, config]) => {
+      if (config.isHidden) {
+        return false;
+      }
+      // OpenAI models are not region-scoped (no Bedrock CRI). Always offer them in
+      // the picker; the worker fails at request time if the API key is missing.
+      if (config.provider === 'openai') {
+        return true;
+      }
+      return config.supportedCriProfiles.includes(criRegion);
+    })
     .map(([type, _]) => type as ModelType);
 };

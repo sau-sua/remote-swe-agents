@@ -47,6 +47,10 @@ export interface WorkerProps {
    */
   anthropicAuthTokenParameter?: IStringParameter;
   /**
+   * OpenAI API key. When set, GPT-5.3 Codex is available as a model.
+   */
+  openaiApiKeyParameter?: IStringParameter;
+  /**
    * Deploy Bedrock Agent Core Runtime. Set to false to use Claude via Anthropic API only (avoids AWS Bedrock agent limit).
    * @default false
    */
@@ -405,6 +409,11 @@ export CLAUDE_CODE_OAUTH_TOKEN=${
           : '""'
       }
 export ANTHROPIC_AUTH_TOKEN="$CLAUDE_CODE_OAUTH_TOKEN"
+export OPENAI_API_KEY=${
+        props.openaiApiKeyParameter
+          ? `$(aws ssm get-parameter --name ${props.openaiApiKeyParameter.parameterName} --region ${Stack.of(this).region} --query \"Parameter.Value\" --output text)`
+          : '""'
+      }
 export GITHUB_PERSONAL_ACCESS_TOKEN=${
         props.githubPersonalAccessTokenParameter
           ? `$(aws ssm get-parameter --name ${props.githubPersonalAccessTokenParameter.parameterName} --region ${Stack.of(this).region} --query \"Parameter.Value\" --output text 2>/dev/null || echo "")`
@@ -466,6 +475,7 @@ Environment=LLM_PROVIDER=${props.llmProvider ?? 'bedrock'}
 Environment=ANTHROPIC_API_KEY_PARAMETER_NAME=${props.anthropicApiKeyParameter?.parameterName ?? ''}
 Environment=CLAUDE_CODE_OAUTH_TOKEN_PARAMETER_NAME=${props.anthropicAuthTokenParameter?.parameterName ?? ''}
 Environment=ANTHROPIC_AUTH_TOKEN_PARAMETER_NAME=${props.anthropicAuthTokenParameter?.parameterName ?? ''}
+Environment=OPENAI_API_KEY_PARAMETER_NAME=${props.openaiApiKeyParameter?.parameterName ?? ''}
 Environment=VAPID_PUBLIC_KEY_PARAMETER_NAME=${props.vapidKeys.publicKeyParameter.parameterName}
 Environment=VAPID_PRIVATE_KEY_PARAMETER_NAME=${props.vapidKeys.privateKeyParameter.parameterName}
 Environment=EVENT_TRIGGER_SFN_ARN=${eventTrigger.handlerStateMachine.stateMachineArn}
@@ -583,6 +593,7 @@ systemctl start myapp
         llmProvider: props.llmProvider,
         anthropicApiKeyParameter: props.anthropicApiKeyParameter,
         anthropicAuthTokenParameter: props.anthropicAuthTokenParameter,
+        openaiApiKeyParameter: props.openaiApiKeyParameter,
         additionalManagedPolicies: props.additionalManagedPolicies,
         vapidKeys: props.vapidKeys,
         eventTrigger,
@@ -630,6 +641,7 @@ systemctl start myapp
     props.slackBotTokenParameter?.grantRead(role);
     props.anthropicApiKeyParameter?.grantRead(role);
     props.anthropicAuthTokenParameter?.grantRead(role);
+    props.openaiApiKeyParameter?.grantRead(role);
     props.slackBotTokenParameter?.grantRead(role);
     props.vapidKeys.grantRead(role);
 

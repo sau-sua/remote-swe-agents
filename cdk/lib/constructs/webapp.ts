@@ -51,6 +51,12 @@ export interface WebappProps {
   bedrockCriRegionOverride?: string;
 
   /**
+   * When true, the webapp model picker includes OpenAI Codex models.
+   * @default false
+   */
+  openaiEnabled?: boolean;
+
+  /**
    * Use Spot instances for workers. Set WORKER_USE_SPOT in Lambda environment.
    * @default false
    */
@@ -104,6 +110,7 @@ export class Webapp extends Construct {
         NEXT_PUBLIC_EVENT_HTTP_ENDPOINT: workerBus.httpEndpoint,
         NEXT_PUBLIC_AWS_REGION: Stack.of(this).region,
         NEXT_PUBLIC_BEDROCK_CRI_REGION_OVERRIDE: props.bedrockCriRegionOverride ?? '',
+        ...(props.openaiEnabled ? { NEXT_PUBLIC_OPENAI_ENABLED: 'true' } : {}),
         ...(props.slackOnlySessionCreation ? { NEXT_PUBLIC_SLACK_ONLY_SESSION_CREATION: 'true' } : {}),
       },
     });
@@ -123,6 +130,7 @@ export class Webapp extends Construct {
         BUCKET_NAME: storage.bucket.bucketName,
         AGENT_RUNTIME_ARN: props.agentCoreRuntime?.runtimeArn ?? '',
         BEDROCK_CRI_REGION_OVERRIDE: props.bedrockCriRegionOverride ?? '',
+        ...(props.openaiEnabled ? { NEXT_PUBLIC_OPENAI_ENABLED: 'true' } : {}),
         REMOTE_SWE_STACK_NAME: Stack.of(this).stackName,
         ...(props.workerUseSpot ? { WORKER_USE_SPOT: 'true' } : {}),
         ...(props.workerTerminateOnSessionEnd ? { WORKER_TERMINATE_ON_SESSION_END: 'true' } : {}),

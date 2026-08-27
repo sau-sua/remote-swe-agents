@@ -114,6 +114,9 @@ const props: MainStackProps = {
   ...(process.env.CLAUDE_CODE_OAUTH_TOKEN || process.env.ANTHROPIC_AUTH_TOKEN
     ? { anthropicAuthTokenParameterName: '/remote-swe/anthropic/oauth-token' }
     : {}),
+  ...(process.env.OPENAI_API_KEY || process.env.OPENAPI_KEY
+    ? { openaiApiKeyParameterName: '/remote-swe/openai/api-key' }
+    : {}),
   // Set DEPLOY_BEDROCK_RUNTIME=true to deploy Bedrock Agent Core (subject to account limit). Default: use Claude via Anthropic only.
   deployBedrockRuntime: process.env.DEPLOY_BEDROCK_RUNTIME === 'true',
   workerInstanceType: process.env.WORKER_INSTANCE_TYPE,
