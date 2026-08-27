@@ -729,6 +729,13 @@ const categorizeError = (error: unknown): string => {
   if (lowerMessage.includes('accessdenied') || lowerMessage.includes('access denied')) {
     return 'access_denied';
   }
+  if (
+    lowerMessage.includes('incorrect api key') ||
+    lowerMessage.includes('invalid api key') ||
+    lowerMessage.includes('invalid_api_key')
+  ) {
+    return 'authentication_error';
+  }
   if (lowerMessage.includes('timeout') || lowerMessage.includes('timed out')) {
     return 'timeout';
   }
@@ -749,6 +756,8 @@ const getRecoveryHint = (errorType: string, errorMessage: string): string => {
       return 'Recovery hint: The service is temporarily unavailable. Please continue with your task - the system will automatically retry.';
     case 'access_denied':
       return 'Recovery hint: Access was denied. This might be a permissions issue. Please notify the user about this error.';
+    case 'authentication_error':
+      return 'Recovery hint: The OpenAI API key was rejected. Confirm that SSM parameter /remote-swe/openai/api-key stores a valid key (typically starting with sk-), not an encrypted blob. SecureString parameters must be decrypted with kms:Decrypt.';
     case 'timeout':
       return 'Recovery hint: The request timed out. Try reducing the complexity of your current operation or breaking it into smaller steps.';
     default:

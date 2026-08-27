@@ -299,6 +299,7 @@ sudo -u ubuntu bash -c 'git config --global user.email "coolboyhy1607@gmail.com"
         `
 aws ssm get-parameter \
     --name ${privateKey.parameterName} \
+    --with-decryption \
     --region ${Stack.of(this).region} \
     --query "Parameter.Value" \
     --output text > /opt/private-key.pem
@@ -395,37 +396,37 @@ TOKEN=$(curl -s -X PUT "http://169.254.169.254/latest/api/token" -H "X-aws-ec2-m
 export WORKER_ID=$(curl -s -H "X-aws-ec2-metadata-token: $TOKEN" http://169.254.169.254/latest/meta-data/tags/instance/RemoteSweWorkerId)
 export SLACK_BOT_TOKEN=${
         props.slackBotTokenParameter
-          ? `$(aws ssm get-parameter --name ${props.slackBotTokenParameter.parameterName} --region ${Stack.of(this).region} --query "Parameter.Value" --output text 2>/dev/null || echo "")`
+          ? `$(aws ssm get-parameter --name ${props.slackBotTokenParameter.parameterName} --with-decryption --region ${Stack.of(this).region} --query "Parameter.Value" --output text 2>/dev/null || echo "")`
           : '""'
       }
 export ANTHROPIC_API_KEY=${
         props.anthropicApiKeyParameter
-          ? `$(aws ssm get-parameter --name ${props.anthropicApiKeyParameter.parameterName} --region ${Stack.of(this).region} --query \"Parameter.Value\" --output text)`
+          ? `$(aws ssm get-parameter --name ${props.anthropicApiKeyParameter.parameterName} --with-decryption --region ${Stack.of(this).region} --query \"Parameter.Value\" --output text)`
           : '""'
       }
 export CLAUDE_CODE_OAUTH_TOKEN=${
         props.anthropicAuthTokenParameter
-          ? `$(aws ssm get-parameter --name ${props.anthropicAuthTokenParameter.parameterName} --region ${Stack.of(this).region} --query \"Parameter.Value\" --output text)`
+          ? `$(aws ssm get-parameter --name ${props.anthropicAuthTokenParameter.parameterName} --with-decryption --region ${Stack.of(this).region} --query \"Parameter.Value\" --output text)`
           : '""'
       }
 export ANTHROPIC_AUTH_TOKEN="$CLAUDE_CODE_OAUTH_TOKEN"
 export OPENAI_API_KEY=${
         props.openaiApiKeyParameter
-          ? `$(aws ssm get-parameter --name ${props.openaiApiKeyParameter.parameterName} --region ${Stack.of(this).region} --query \"Parameter.Value\" --output text)`
+          ? `$(aws ssm get-parameter --name ${props.openaiApiKeyParameter.parameterName} --with-decryption --region ${Stack.of(this).region} --query \"Parameter.Value\" --output text)`
           : '""'
       }
 export GITHUB_PERSONAL_ACCESS_TOKEN=${
         props.githubPersonalAccessTokenParameter
-          ? `$(aws ssm get-parameter --name ${props.githubPersonalAccessTokenParameter.parameterName} --region ${Stack.of(this).region} --query \"Parameter.Value\" --output text 2>/dev/null || echo "")`
+          ? `$(aws ssm get-parameter --name ${props.githubPersonalAccessTokenParameter.parameterName} --with-decryption --region ${Stack.of(this).region} --query \"Parameter.Value\" --output text 2>/dev/null || echo "")`
           : '""'
       }
 
 # Fetch VAPID keys from SSM if configured
 if [ -n "$VAPID_PUBLIC_KEY_PARAMETER_NAME" ]; then
-  export VAPID_PUBLIC_KEY=$(aws ssm get-parameter --name "$VAPID_PUBLIC_KEY_PARAMETER_NAME" --region ${Stack.of(this).region} --query "Parameter.Value" --output text 2>/dev/null || echo "")
+  export VAPID_PUBLIC_KEY=$(aws ssm get-parameter --name "$VAPID_PUBLIC_KEY_PARAMETER_NAME" --with-decryption --region ${Stack.of(this).region} --query "Parameter.Value" --output text 2>/dev/null || echo "")
 fi
 if [ -n "$VAPID_PRIVATE_KEY_PARAMETER_NAME" ]; then
-  export VAPID_PRIVATE_KEY=$(aws ssm get-parameter --name "$VAPID_PRIVATE_KEY_PARAMETER_NAME" --region ${Stack.of(this).region} --query "Parameter.Value" --output text 2>/dev/null || echo "")
+  export VAPID_PRIVATE_KEY=$(aws ssm get-parameter --name "$VAPID_PRIVATE_KEY_PARAMETER_NAME" --with-decryption --region ${Stack.of(this).region} --query "Parameter.Value" --output text 2>/dev/null || echo "")
 fi
 
 # Start app
@@ -644,6 +645,19 @@ systemctl start myapp
     props.openaiApiKeyParameter?.grantRead(role);
     props.slackBotTokenParameter?.grantRead(role);
     props.vapidKeys.grantRead(role);
+    // SecureString SSM parameters need kms:Decrypt in addition to ssm:GetParameter.
+    // Without this, resume after stop re-reads the encrypted blob and Codex returns 401.
+    role.addToPrincipalPolicy(
+      new iam.PolicyStatement({
+        actions: ['kms:Decrypt'],
+        resources: ['*'],
+        conditions: {
+          StringEquals: {
+            'kms:ViaService': `ssm.${Stack.of(this).region}.amazonaws.com`,
+          },
+        },
+      })
+    );
 
     this.ec2Role = role;
     bus.api.grantPublishAndSubscribe(role);

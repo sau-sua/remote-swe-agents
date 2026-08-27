@@ -3,7 +3,7 @@ import { ConverseCommandInput, ConverseResponse, ContentBlock } from '@aws-sdk/c
 import { ddb, TableName } from './aws';
 import { GetCommand, PutCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
 import { isOpenAIModel, modelConfigs, ModelType } from '../schema';
-import { getParameter } from './aws/ssm';
+import { resolveCredential } from './aws/ssm';
 
 const ULTRA_THINKING_KEYWORD = 'ultrathink';
 
@@ -33,16 +33,6 @@ export const openaiRequestTimeoutMs = (maxTokens: number): number => {
 };
 
 let cachedClient: OpenAI | undefined;
-
-const resolveCredential = async (envVar?: string, parameterName?: string): Promise<string | undefined> => {
-  if (envVar) {
-    return envVar;
-  }
-  if (parameterName) {
-    return getParameter(parameterName);
-  }
-  return undefined;
-};
 
 const getOpenAIClient = async (): Promise<OpenAI> => {
   if (cachedClient) {

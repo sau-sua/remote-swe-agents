@@ -110,10 +110,10 @@ Bedrock / Anthropicモデルに加えて GPT-5.3 Codex を使えるようにす�
 aws ssm put-parameter \
     --name /remote-swe/openai/api-key \
     --value "your-openai-api-key-here" \
-    --type String
+    --type SecureString
 ```
 
-`your-openai-api-key-here` を [OpenAI ダッシュボード](https://platform.openai.com/api-keys) で発行したキー（通常は `sk-...` で始まる）に置き換えてください。
+`your-openai-api-key-here` を [OpenAI ダッシュボード](https://platform.openai.com/api-keys) で発行したキー（通常は `sk-...` で始まる）に置き換えてください。保存時は `SecureString` を推奨します（`String` でも動作します）。ワーカーはセッション再開時も含め、起動のたびにパラメータを復号します。
 
 ### ステップ3：GitHub統合のセットアップ
 

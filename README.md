@@ -112,10 +112,10 @@ To make GPT-5.3 Codex available alongside Bedrock/Anthropic models, create an SS
 aws ssm put-parameter \
     --name /remote-swe/openai/api-key \
     --value "your-openai-api-key-here" \
-    --type String
+    --type SecureString
 ```
 
-Replace `your-openai-api-key-here` with your key from the [OpenAI dashboard](https://platform.openai.com/api-keys) (typically starts with `sk-...`).
+Replace `your-openai-api-key-here` with your key from the [OpenAI dashboard](https://platform.openai.com/api-keys) (typically starts with `sk-...`). `SecureString` is recommended so the key is encrypted at rest; `String` also works. The worker decrypts the parameter on every start, including when a stopped session is resumed.
 
 ### Step 3: GitHub Integration Setup
 

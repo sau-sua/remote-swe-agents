@@ -3,7 +3,7 @@ import { ConverseCommandInput, ConverseResponse, ContentBlock } from '@aws-sdk/c
 import { ddb, TableName } from './aws';
 import { GetCommand, PutCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
 import { modelConfigs, ModelType } from '../schema';
-import { getParameter } from './aws/ssm';
+import { resolveCredential } from './aws/ssm';
 
 const ULTRA_THINKING_KEYWORD = 'ultrathink';
 
@@ -28,18 +28,6 @@ const CLAUDE_CODE_SYSTEM_PROMPT = "You are Claude Code, Anthropic's official CLI
 
 // Cache the resolved Anthropic client to avoid repeated SSM calls.
 let cachedClient: { client: Anthropic; isOAuth: boolean } | undefined;
-
-// Resolve a credential either directly from an environment variable or, when only a
-// parameter name is provided, from SSM Parameter Store.
-const resolveCredential = async (envVar?: string, parameterName?: string): Promise<string | undefined> => {
-  if (envVar) {
-    return envVar;
-  }
-  if (parameterName) {
-    return getParameter(parameterName);
-  }
-  return undefined;
-};
 
 // Initialize Anthropic client. Supports two authentication methods:
 //   1. Claude Code OAuth token, e.g. from `claude setup-token`

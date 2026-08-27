@@ -5779,7 +5779,7 @@ phases:
 
               sudo -u ubuntu bash -c 'git config --global user.email \\"123456+remote-swe-app[bot]@users.noreply.github.com\\"'
 
-              aws ssm get-parameter     --name /remote-swe/github/app-private-key     --region us-east-1     --query \\"Parameter.Value\\"     --output text > /opt/private-key.pem
+              aws ssm get-parameter     --name /remote-swe/github/app-private-key     --with-decryption     --region us-east-1     --query \\"Parameter.Value\\"     --output text > /opt/private-key.pem
 
               curl -L \\"https://github.com/Link-/gh-token/releases/download/v2.0.4/linux-amd64\\" -o gh-token
 
@@ -5939,7 +5939,7 @@ phases:
 
               export WORKER_ID=$(curl -s -H \\"X-aws-ec2-metadata-token: $TOKEN\\" http://169.254.169.254/latest/meta-data/tags/instance/RemoteSweWorkerId)
 
-              export SLACK_BOT_TOKEN=$(aws ssm get-parameter --name /remote-swe/slack/bot-token --region us-east-1 --query \\"Parameter.Value\\" --output text 2>/dev/null || echo \\"\\")
+              export SLACK_BOT_TOKEN=$(aws ssm get-parameter --name /remote-swe/slack/bot-token --with-decryption --region us-east-1 --query \\"Parameter.Value\\" --output text 2>/dev/null || echo \\"\\")
 
               export ANTHROPIC_API_KEY=\\"\\"
 
@@ -5956,13 +5956,13 @@ phases:
 
               if [ -n \\"$VAPID_PUBLIC_KEY_PARAMETER_NAME\\" ]; then
 
-              \\  export VAPID_PUBLIC_KEY=$(aws ssm get-parameter --name \\"$VAPID_PUBLIC_KEY_PARAMETER_NAME\\" --region us-east-1 --query \\"Parameter.Value\\" --output text 2>/dev/null || echo \\"\\")
+              \\  export VAPID_PUBLIC_KEY=$(aws ssm get-parameter --name \\"$VAPID_PUBLIC_KEY_PARAMETER_NAME\\" --with-decryption --region us-east-1 --query \\"Parameter.Value\\" --output text 2>/dev/null || echo \\"\\")
 
               fi
 
               if [ -n \\"$VAPID_PRIVATE_KEY_PARAMETER_NAME\\" ]; then
 
-              \\  export VAPID_PRIVATE_KEY=$(aws ssm get-parameter --name \\"$VAPID_PRIVATE_KEY_PARAMETER_NAME\\" --region us-east-1 --query \\"Parameter.Value\\" --output text 2>/dev/null || echo \\"\\")
+              \\  export VAPID_PRIVATE_KEY=$(aws ssm get-parameter --name \\"$VAPID_PRIVATE_KEY_PARAMETER_NAME\\" --with-decryption --region us-east-1 --query \\"Parameter.Value\\" --output text 2>/dev/null || echo \\"\\")
 
               fi
 
@@ -6622,7 +6622,7 @@ phases:
 
               sudo -u ubuntu bash -c 'git config --global user.email \\"123456+remote-swe-app[bot]@users.noreply.github.com\\"'
 
-              aws ssm get-parameter     --name /remote-swe/github/app-private-key     --region us-east-1     --query \\"Parameter.Value\\"     --output text > /opt/private-key.pem
+              aws ssm get-parameter     --name /remote-swe/github/app-private-key     --with-decryption     --region us-east-1     --query \\"Parameter.Value\\"     --output text > /opt/private-key.pem
 
               curl -L \\"https://github.com/Link-/gh-token/releases/download/v2.0.4/linux-amd64\\" -o gh-token
 
@@ -6782,7 +6782,7 @@ phases:
 
               export WORKER_ID=$(curl -s -H \\"X-aws-ec2-metadata-token: $TOKEN\\" http://169.254.169.254/latest/meta-data/tags/instance/RemoteSweWorkerId)
 
-              export SLACK_BOT_TOKEN=$(aws ssm get-parameter --name /remote-swe/slack/bot-token --region us-east-1 --query \\"Parameter.Value\\" --output text 2>/dev/null || echo \\"\\")
+              export SLACK_BOT_TOKEN=$(aws ssm get-parameter --name /remote-swe/slack/bot-token --with-decryption --region us-east-1 --query \\"Parameter.Value\\" --output text 2>/dev/null || echo \\"\\")
 
               export ANTHROPIC_API_KEY=\\"\\"
 
@@ -6799,13 +6799,13 @@ phases:
 
               if [ -n \\"$VAPID_PUBLIC_KEY_PARAMETER_NAME\\" ]; then
 
-              \\  export VAPID_PUBLIC_KEY=$(aws ssm get-parameter --name \\"$VAPID_PUBLIC_KEY_PARAMETER_NAME\\" --region us-east-1 --query \\"Parameter.Value\\" --output text 2>/dev/null || echo \\"\\")
+              \\  export VAPID_PUBLIC_KEY=$(aws ssm get-parameter --name \\"$VAPID_PUBLIC_KEY_PARAMETER_NAME\\" --with-decryption --region us-east-1 --query \\"Parameter.Value\\" --output text 2>/dev/null || echo \\"\\")
 
               fi
 
               if [ -n \\"$VAPID_PRIVATE_KEY_PARAMETER_NAME\\" ]; then
 
-              \\  export VAPID_PRIVATE_KEY=$(aws ssm get-parameter --name \\"$VAPID_PRIVATE_KEY_PARAMETER_NAME\\" --region us-east-1 --query \\"Parameter.Value\\" --output text 2>/dev/null || echo \\"\\")
+              \\  export VAPID_PRIVATE_KEY=$(aws ssm get-parameter --name \\"$VAPID_PRIVATE_KEY_PARAMETER_NAME\\" --with-decryption --region us-east-1 --query \\"Parameter.Value\\" --output text 2>/dev/null || echo \\"\\")
 
               fi
 
@@ -7236,7 +7236,7 @@ sudo -u ubuntu bash -c 'curl -LsSf https://astral.sh/uv/install.sh | sh'
 # Configure Git user for ubuntu (GitHub App)
 sudo -u ubuntu bash -c 'git config --global user.name "remote-swe-app[bot]"'
 sudo -u ubuntu bash -c 'git config --global user.email "123456+remote-swe-app[bot]@users.noreply.github.com"'
-aws ssm get-parameter     --name /remote-swe/github/app-private-key     --region us-east-1     --query "Parameter.Value"     --output text > /opt/private-key.pem
+aws ssm get-parameter     --name /remote-swe/github/app-private-key     --with-decryption     --region us-east-1     --query "Parameter.Value"     --output text > /opt/private-key.pem
 curl -L "https://github.com/Link-/gh-token/releases/download/v2.0.4/linux-amd64" -o gh-token
 chmod +x gh-token
 mv gh-token /usr/bin
@@ -7326,7 +7326,7 @@ fi
 # Set up dynamic environment variables
 TOKEN=$(curl -s -X PUT "http://169.254.169.254/latest/api/token" -H "X-aws-ec2-metadata-token-ttl-seconds: 900")
 export WORKER_ID=$(curl -s -H "X-aws-ec2-metadata-token: $TOKEN" http://169.254.169.254/latest/meta-data/tags/instance/RemoteSweWorkerId)
-export SLACK_BOT_TOKEN=$(aws ssm get-parameter --name /remote-swe/slack/bot-token --region us-east-1 --query "Parameter.Value" --output text 2>/dev/null || echo "")
+export SLACK_BOT_TOKEN=$(aws ssm get-parameter --name /remote-swe/slack/bot-token --with-decryption --region us-east-1 --query "Parameter.Value" --output text 2>/dev/null || echo "")
 export ANTHROPIC_API_KEY=""
 export CLAUDE_CODE_OAUTH_TOKEN=""
 export ANTHROPIC_AUTH_TOKEN="$CLAUDE_CODE_OAUTH_TOKEN"
@@ -7335,10 +7335,10 @@ export GITHUB_PERSONAL_ACCESS_TOKEN=""
 
 # Fetch VAPID keys from SSM if configured
 if [ -n "$VAPID_PUBLIC_KEY_PARAMETER_NAME" ]; then
-  export VAPID_PUBLIC_KEY=$(aws ssm get-parameter --name "$VAPID_PUBLIC_KEY_PARAMETER_NAME" --region us-east-1 --query "Parameter.Value" --output text 2>/dev/null || echo "")
+  export VAPID_PUBLIC_KEY=$(aws ssm get-parameter --name "$VAPID_PUBLIC_KEY_PARAMETER_NAME" --with-decryption --region us-east-1 --query "Parameter.Value" --output text 2>/dev/null || echo "")
 fi
 if [ -n "$VAPID_PRIVATE_KEY_PARAMETER_NAME" ]; then
-  export VAPID_PRIVATE_KEY=$(aws ssm get-parameter --name "$VAPID_PRIVATE_KEY_PARAMETER_NAME" --region us-east-1 --query "Parameter.Value" --output text 2>/dev/null || echo "")
+  export VAPID_PRIVATE_KEY=$(aws ssm get-parameter --name "$VAPID_PRIVATE_KEY_PARAMETER_NAME" --with-decryption --region us-east-1 --query "Parameter.Value" --output text 2>/dev/null || echo "")
 fi
 
 # Start app
@@ -7787,6 +7787,16 @@ systemctl start myapp",
                   ],
                 },
               ],
+            },
+            {
+              "Action": "kms:Decrypt",
+              "Condition": {
+                "StringEquals": {
+                  "kms:ViaService": "ssm.us-east-1.amazonaws.com",
+                },
+              },
+              "Effect": "Allow",
+              "Resource": "*",
             },
             {
               "Action": [

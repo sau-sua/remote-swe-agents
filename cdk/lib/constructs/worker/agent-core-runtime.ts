@@ -140,6 +140,17 @@ export class AgentCoreRuntime extends Construct implements IGrantable {
     props.openaiApiKeyParameter?.grantRead(role);
     props.webappOriginSourceParameter.grantRead(role);
     props.vapidKeys.grantRead(role);
+    role.addToPrincipalPolicy(
+      new PolicyStatement({
+        actions: ['kms:Decrypt'],
+        resources: ['*'],
+        conditions: {
+          StringEquals: {
+            'kms:ViaService': `ssm.${Stack.of(this).region}.amazonaws.com`,
+          },
+        },
+      })
+    );
     props.bus.api.grantPublishAndSubscribe(role);
     props.bus.api.grantConnect(role);
 
