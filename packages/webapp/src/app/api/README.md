@@ -23,9 +23,13 @@ Creates a new agent session with an initial message.
 **Request Body**:
 ```json
 {
-  "message": "Your initial message to the agent"
+  "message": "Your initial message to the agent",
+  "modelOverride": "sonnet5",
+  "customAgentId": "optional-custom-agent-id"
 }
 ```
+
+`customAgentId` is optional. When provided, the session uses that custom agent configuration (system prompt, tools, MCP, runtime).
 
 **Response**:
 ```json

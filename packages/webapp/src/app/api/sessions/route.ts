@@ -1,6 +1,6 @@
 import { validateApiKeyMiddleware } from '../auth/api-key';
 import { NextRequest, NextResponse } from 'next/server';
-import { createSession } from '@remote-swe-agents/agent-core/lib';
+import { createSession, getCustomAgent } from '@remote-swe-agents/agent-core/lib';
 import { z } from 'zod';
 import { modelTypeSchema } from '@remote-swe-agents/agent-core/schema';
 
@@ -8,6 +8,7 @@ import { modelTypeSchema } from '@remote-swe-agents/agent-core/schema';
 const createSessionSchema = z.object({
   message: z.string().min(1),
   modelOverride: modelTypeSchema.optional(),
+  customAgentId: z.string().min(1).optional(),
 });
 
 export async function POST(request: NextRequest) {
@@ -29,12 +30,20 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Invalid request data', details: parsedBody.error.format() }, { status: 400 });
   }
 
-  const { message, modelOverride } = parsedBody.data;
+  const { message, modelOverride, customAgentId } = parsedBody.data;
+
+  if (customAgentId) {
+    const agent = await getCustomAgent(customAgentId);
+    if (!agent) {
+      return NextResponse.json({ error: `Custom agent "${customAgentId}" not found` }, { status: 400 });
+    }
+  }
 
   const workerId = await createSession({
     message,
     initiator: `rest#`,
     modelOverride,
+    customAgentId,
   });
 
   return NextResponse.json({ sessionId: workerId }, { status: 201 });

@@ -97,8 +97,9 @@ jobs:
       - run: |
           npm run build
           npm run format:check
+          npm run test
         working-directory: ./packages/slack-bolt-app
-        name: Run static analyses
+        name: Run static analyses and unit tests
   Build-and-Test-Worker:
     needs: changes
     if: ${{ needs.changes.outputs.worker == 'true' || (github.event_name == 'push' && github.ref == 'refs/heads/main') || github.event_name == 'workflow_dispatch' }}
