@@ -1,6 +1,6 @@
 import { spawn } from 'child_process';
 import { authorizeGitHubCli } from './github';
-export { isGitHubConfigured, authorizeGitHubCli } from './github';
+export { isGitHubConfigured, authorizeGitHubCli, applyGitHubCredentialsForSession } from './github';
 import { homedir, tmpdir } from 'os';
 import { join } from 'path';
 import { mkdirSync, writeFileSync, unlinkSync } from 'fs';

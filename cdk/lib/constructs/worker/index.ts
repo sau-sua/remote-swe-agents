@@ -18,6 +18,7 @@ import { IRepository } from 'aws-cdk-lib/aws-ecr';
 import { EventTrigger } from './event-trigger';
 import { VapidKeys } from '../vapid-keys';
 import { UserPool } from 'aws-cdk-lib/aws-cognito';
+import { grantGitHubAccountParameters } from '../github-account-ssm';
 
 export interface WorkerProps {
   vpc: ec2.IVpc;
@@ -638,6 +639,7 @@ systemctl start myapp
     props.imageBucket.grantReadWrite(role);
     privateKey?.grantRead(role);
     props.githubPersonalAccessTokenParameter?.grantRead(role);
+    grantGitHubAccountParameters(role, Stack.of(this), ['ssm:GetParameter']);
     props.slackBotTokenParameter?.grantRead(role);
     props.anthropicApiKeyParameter?.grantRead(role);
     props.anthropicAuthTokenParameter?.grantRead(role);

@@ -17,6 +17,7 @@ export * from './images';
 export * from './image-resize';
 export * from './webapp-origin';
 export * from './preferences';
+export * from './github-account';
 export * from './custom-agent';
 export * from './mermaid-validator';
 export * from './push-notification';

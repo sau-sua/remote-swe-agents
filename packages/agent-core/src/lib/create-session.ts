@@ -5,6 +5,7 @@ import { MessageItem, ModelType, SessionItem, getDefaultRuntimeType, resolveRunt
 import { getOrCreateWorkerInstance, updateInstanceStatus } from './worker-manager';
 import { sendWorkerEvent } from './events';
 import { getCustomAgent } from './custom-agent';
+import { resolveGitHubAccountId } from './github-account';
 import { renderUserMessage, renderAgentMessage, renderSystemNotification } from './prompt';
 import { postNewSlackThread } from './slack';
 import { getWebappSessionUrl } from './webapp-origin';
@@ -16,6 +17,7 @@ export interface CreateSessionParams {
   message: string;
   initiator: string;
   customAgentId?: string;
+  githubAccountId?: string;
   title?: string;
   agentName?: string;
   modelOverride?: ModelType;
@@ -49,6 +51,7 @@ export const createSession = async (params: CreateSessionParams): Promise<string
     message,
     initiator,
     customAgentId,
+    githubAccountId: requestedGithubAccountId,
     title,
     agentName,
     modelOverride,
@@ -60,6 +63,7 @@ export const createSession = async (params: CreateSessionParams): Promise<string
     creatorSessionId,
   } = params;
   const agent = await getCustomAgent(customAgentId);
+  const githubAccountId = await resolveGitHubAccountId(requestedGithubAccountId);
   const runtimeType = resolveRuntimeType(agent?.runtimeType ?? getDefaultRuntimeType());
 
   let workerId = `session-${Date.now()}`;
@@ -148,6 +152,7 @@ export const createSession = async (params: CreateSessionParams): Promise<string
               customAgentId: agent?.SK,
               runtimeType,
               ...(title ? { title } : {}),
+              ...(githubAccountId ? { githubAccountId } : {}),
               ...(agentName ? { agentName } : {}),
               ...(parentSessionId ? { parentSessionId } : {}),
               ...(creatorSessionId ? { creatorSessionId } : {}),

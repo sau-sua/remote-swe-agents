@@ -1,6 +1,9 @@
-import { exec, spawn } from 'child_process';
+import { exec, execFile, spawn } from 'child_process';
 import { promisify } from 'util';
+import { getGitHubAccount, getGitHubAccountToken } from '../../lib/github-account';
+import { SessionItem } from '../../schema';
 const execAsync = promisify(exec);
+const execFileAsync = promisify(execFile);
 
 const cache = {
   updatedAt: 0,
@@ -12,6 +15,43 @@ export const isGitHubConfigured = () => {
     process.env.GITHUB_PERSONAL_ACCESS_TOKEN ||
     (process.env.GITHUB_APP_PRIVATE_KEY_PATH && process.env.GITHUB_APP_ID && process.env.GITHUB_APP_INSTALLATION_ID)
   );
+};
+
+export const resetGitHubAuthCache = () => {
+  cache.updatedAt = 0;
+  cache.token = '';
+};
+
+export const applyGitIdentity = async (name: string, email: string): Promise<void> => {
+  await execFileAsync('git', ['config', '--global', 'user.name', name]);
+  await execFileAsync('git', ['config', '--global', 'user.email', email]);
+};
+
+/**
+ * Switch this worker process to a session-specific GitHub PAT and git identity.
+ * When the session has no named account, the CDK-configured default PAT is kept.
+ */
+export const applyGitHubCredentialsForSession = async (session: SessionItem | undefined): Promise<void> => {
+  if (!session?.githubAccountId) {
+    return;
+  }
+
+  const account = await getGitHubAccount(session.githubAccountId);
+  if (!account) {
+    console.warn(`GitHub account ${session.githubAccountId} was not found; using the default PAT from the environment`);
+    return;
+  }
+
+  const token = await getGitHubAccountToken(account.SK);
+  if (!token) {
+    console.warn(`GitHub PAT for account "${account.name}" was not found in SSM; using the default PAT`);
+    return;
+  }
+
+  resetGitHubAuthCache();
+  process.env.GITHUB_PERSONAL_ACCESS_TOKEN = token;
+  await applyGitIdentity(account.gitUserName, account.gitUserEmail);
+  console.log(`Using GitHub account "${account.name}" (${account.gitUserEmail}) for this session`);
 };
 
 export const buildGhLoginEnv = (env: NodeJS.ProcessEnv): NodeJS.ProcessEnv => {

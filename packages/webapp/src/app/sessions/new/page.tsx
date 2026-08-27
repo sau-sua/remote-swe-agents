@@ -7,7 +7,7 @@ import NewSessionForm from './NewSessionForm';
 import { ddb, TableName } from '@remote-swe-agents/agent-core/aws';
 import { QueryCommand } from '@aws-sdk/lib-dynamodb';
 import { PromptTemplate } from '@/app/sessions/new/schemas';
-import { getCustomAgents, getPreferences } from '@remote-swe-agents/agent-core/lib';
+import { getCustomAgents, getGitHubAccounts, getPreferences } from '@remote-swe-agents/agent-core/lib';
 
 export default async function NewSessionPage() {
   if (process.env.SLACK_ONLY_SESSION_CREATION === 'true') {
@@ -31,6 +31,7 @@ export default async function NewSessionPage() {
   );
   const preferences = await getPreferences();
   const customAgents = await getCustomAgents();
+  const githubAccounts = await getGitHubAccounts();
 
   templates = (result.Items ?? []) as PromptTemplate[];
 
@@ -81,6 +82,7 @@ export default async function NewSessionPage() {
                   templates={templates}
                   preferences={preferences}
                   customAgents={customAgents}
+                  githubAccounts={githubAccounts}
                   agentIconUrls={agentIconUrls}
                 />
               </div>

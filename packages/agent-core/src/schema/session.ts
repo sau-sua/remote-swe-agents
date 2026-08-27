@@ -29,6 +29,11 @@ export const sessionItemSchema = z.object({
   lastMessage: z.string().optional(),
   lastMessageAt: z.number().optional(),
   customAgentId: z.string().optional(),
+  /**
+   * Named GitHub PAT profile to use for this session. When omitted, the worker
+   * uses the default PAT from environment / global preferences.
+   */
+  githubAccountId: z.string().optional(),
   runtimeType: runtimeTypeSchema.optional(),
   parentSessionId: z.string().optional(),
   creatorSessionId: z.string().optional(),

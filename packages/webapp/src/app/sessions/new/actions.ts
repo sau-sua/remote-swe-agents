@@ -11,7 +11,7 @@ export const createNewWorker = authActionClient
     if (process.env.SLACK_ONLY_SESSION_CREATION === 'true') {
       throw new MyCustomError('Session creation is only allowed from Slack.');
     }
-    const { message, imageKeys = [], fileKeys = [], modelOverride, customAgentId = '' } = parsedInput;
+    const { message, imageKeys = [], fileKeys = [], modelOverride, customAgentId = '', githubAccountId } = parsedInput;
     const { userId } = ctx;
 
     let workerId: string;
@@ -20,6 +20,7 @@ export const createNewWorker = authActionClient
         message,
         initiator: `webapp#${userId}`,
         customAgentId: !customAgentId || customAgentId === 'DEFAULT' ? undefined : customAgentId,
+        githubAccountId,
         modelOverride,
         imageKeys,
         fileKeys,

@@ -46,6 +46,7 @@ async function exportSingleSession(session: SessionItem, outputDir: string): Pro
     title: session.title,
     parentSessionId: session.parentSessionId,
     customAgentId: session.customAgentId,
+    githubAccountId: session.githubAccountId,
     runtimeType: session.runtimeType,
     agentName: session.agentName,
     sessionCost: session.sessionCost,

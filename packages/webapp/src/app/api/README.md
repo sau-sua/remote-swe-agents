@@ -25,11 +25,14 @@ Creates a new agent session with an initial message.
 {
   "message": "Your initial message to the agent",
   "modelOverride": "sonnet5",
-  "customAgentId": "optional-custom-agent-id"
+  "customAgentId": "optional-custom-agent-id",
+  "githubAccountId": "optional-github-account-id"
 }
 ```
 
 `customAgentId` is optional. When provided, the session uses that custom agent configuration (system prompt, tools, MCP, runtime).
+
+`githubAccountId` is optional. When provided, the session uses that named GitHub PAT profile instead of the default token. When omitted, the global default GitHub account is used if one is configured.
 
 **Response**:
 ```json

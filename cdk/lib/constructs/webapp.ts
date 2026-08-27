@@ -21,6 +21,7 @@ import { PolicyStatement } from 'aws-cdk-lib/aws-iam';
 import { LambdaWarmer } from './lambda-warmer';
 import { AgentCoreRuntime } from './worker/agent-core-runtime';
 import { VapidKeys } from './vapid-keys';
+import { grantGitHubAccountParameters } from './github-account-ssm';
 
 export interface WebappProps {
   storage: Storage;
@@ -156,6 +157,11 @@ export class Webapp extends Construct {
     storage.bucket.grantReadWrite(handler);
     workerBus.api.grantPublish(handler);
     props.agentCoreRuntime?.grantInvoke(handler);
+    grantGitHubAccountParameters(handler, Stack.of(this), [
+      'ssm:GetParameter',
+      'ssm:PutParameter',
+      'ssm:DeleteParameter',
+    ]);
     if (props.vapidKeys) {
       props.vapidKeys.grantRead(handler);
       handler.node.addDependency(props.vapidKeys.customResource);
