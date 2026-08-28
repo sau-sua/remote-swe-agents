@@ -3,6 +3,8 @@ import { z } from 'zod';
 export const modelTypeList = [
   'opus5',
   'sonnet5',
+  'gpt-5.5',
+  'gpt-5.4',
   'gpt-5.3-codex',
   'sonnet4.6',
   'sonnet4.6-long-context-mode',
@@ -81,6 +83,35 @@ export const modelConfigs: Record<ModelType, z.infer<typeof modelConfigSchema>> 
     assistantPrefillSupport: false,
     supportedCriProfiles: ['global', 'us', 'eu', 'au'],
     pricing: { input: 0.005, output: 0.025, cacheRead: 0.0005, cacheWrite: 0.00625 },
+  },
+  'gpt-5.5': {
+    name: 'GPT-5.5',
+    modelId: 'gpt-5.5',
+    maxOutputTokens: 128_000,
+    maxInputTokens: 1_000_000,
+    cacheSupport: [],
+    reasoningSupport: true,
+    toolChoiceSupport: ['any', 'auto', 'tool'],
+    assistantPrefillSupport: false,
+    provider: 'openai',
+    // CRI is unused for OpenAI; listed so the schema stays consistent.
+    supportedCriProfiles: ['global', 'us', 'eu', 'apac', 'jp', 'au'],
+    // OpenAI pricing is $/1M tokens; this codebase stores $/1K.
+    pricing: { input: 0.005, output: 0.03, cacheRead: 0.0005, cacheWrite: 0.005 },
+  },
+  'gpt-5.4': {
+    name: 'GPT-5.4',
+    modelId: 'gpt-5.4',
+    maxOutputTokens: 128_000,
+    maxInputTokens: 1_000_000,
+    cacheSupport: [],
+    reasoningSupport: true,
+    toolChoiceSupport: ['any', 'auto', 'tool'],
+    assistantPrefillSupport: false,
+    provider: 'openai',
+    supportedCriProfiles: ['global', 'us', 'eu', 'apac', 'jp', 'au'],
+    // OpenAI pricing is $/1M tokens; this codebase stores $/1K.
+    pricing: { input: 0.0025, output: 0.015, cacheRead: 0.00025, cacheWrite: 0.0025 },
   },
   'gpt-5.3-codex': {
     name: 'GPT-5.3 Codex',

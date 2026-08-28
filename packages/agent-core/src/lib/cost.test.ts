@@ -33,6 +33,18 @@ test('calculateCost for haiku3.5 model', () => {
   expect(cost).toBe(expectedCost);
 });
 
+test('calculateCost for gpt-5.5', () => {
+  const cost = calculateCost('gpt-5.5', 1000, 500, 200, 100);
+  const expectedCost = (1000 * 0.005 + 500 * 0.03 + 200 * 0.0005 + 100 * 0.005) / 1000;
+  expect(cost).toBe(expectedCost);
+});
+
+test('calculateCost for gpt-5.4 does not use gpt-5.5 pricing', () => {
+  const cost = calculateCost('gpt-5.4', 1000, 500, 200, 100);
+  const expectedCost = (1000 * 0.0025 + 500 * 0.015 + 200 * 0.00025 + 100 * 0.0025) / 1000;
+  expect(cost).toBe(expectedCost);
+});
+
 test('calculateCost returns 0 for unknown model', () => {
   // GIVEN
   const modelId = 'unknown-model-id';
