@@ -17,6 +17,7 @@ import { getSessionIdFromSlack } from '../util/session-map';
 import { resolveSlackDisplayName } from '../util/slack-user-cache';
 import { parseLeadingDirectives } from '../util/agent-directive';
 import { ValidationError } from '../util/error';
+import { resolveRuntimeTypeForNewSession, RuntimeType } from '@remote-swe-agents/agent-core/schema';
 
 const BotToken = process.env.BOT_TOKEN!;
 const lambda = new LambdaClient();
@@ -42,6 +43,7 @@ export async function handleMessage(
   let customAgentId: string | undefined;
   let selectedAgentName: string | undefined;
   let githubAccountId: string | undefined;
+  let customAgentRuntimeType: RuntimeType | undefined;
 
   if (isThreadRoot) {
     const parsed = parseLeadingDirectives(message);
@@ -63,6 +65,7 @@ export async function handleMessage(
       }
       customAgentId = resolved.agent.SK;
       selectedAgentName = resolved.agent.name;
+      customAgentRuntimeType = resolved.agent.runtimeType;
     }
     if (parsed.githubAccountRef) {
       const resolved = await findGitHubAccountByNameOrId(parsed.githubAccountRef);
@@ -88,75 +91,81 @@ export async function handleMessage(
   }
 
   const workerId = await getSessionIdFromSlack(channel, event.thread_ts ?? event.ts, isThreadRoot);
+  // Only pin runtime on new threads. Replies must follow the session's stored runtime
+  // (legacy Slack threads may still be EC2).
+  const runtimeType = isThreadRoot ? resolveRuntimeTypeForNewSession(customAgentRuntimeType) : undefined;
 
-  // Process image attachments if present
-  const imageKeys = (
-    await Promise.all(
-      event.files
-        ?.filter((file: { mimetype?: string }) => file?.mimetype?.startsWith('image/'))
-        .map(async (file: { id: string; mimetype?: string }) => {
-          const image = await client.files.info({
-            file: file.id,
-          });
-
-          if (image.file?.url_private_download && image.file.filetype && image.file.mimetype) {
-            const fileContent = await fetch(image.file.url_private_download, {
-              headers: { Authorization: `Bearer ${BotToken}` },
-            }).then((res) => res.arrayBuffer());
-
-            const key = `${workerId}/${file.id}.${image.file.filetype}`;
-            await s3.send(
-              new PutObjectCommand({
-                Bucket: BucketName,
-                Key: key,
-                Body: Buffer.from(fileContent),
-                ContentType: image.file.mimetype,
-              })
-            );
-
-            return key;
-          }
-        }) ?? []
-    )
-  ).filter((key) => key != null);
+  // Start the worker before image uploads / Slack UI work. New Slack sessions used to
+  // wait on those and then launch EC2 because the Handler Lambda lacked AGENT_RUNTIME_ARN.
+  const ensureInstance = lambda.send(
+    new InvokeCommand({
+      FunctionName: AsyncLambdaName,
+      Payload: JSON.stringify({
+        type: 'ensureInstance',
+        workerId,
+        slackChannelId: event.channel,
+        slackThreadTs: event.ts,
+        runtimeType,
+      } satisfies AsyncHandlerEvent),
+      InvocationType: 'Event',
+    })
+  );
+  const sessionInfo = isThreadRoot
+    ? saveSessionInfo(workerId, message, userId, event.channel, event.ts, {
+        customAgentId,
+        githubAccountId,
+        runtimeType,
+      })
+    : Promise.resolve();
 
   const region = process.env.AWS_REGION!;
   const logStreamName = `log-${workerId}`;
   const logGroupName = process.env.LOG_GROUP_NAME!;
   const cloudwatchUrl = `https://${region}.console.aws.amazon.com/cloudwatch/home?region=${region}#logsV2:log-groups/log-group/${encodeURIComponent(logGroupName)}/log-events/${encodeURIComponent(logStreamName)}`;
 
-  const sessionUrl = await getWebappSessionUrl(workerId);
+  // Images, display name, and the webapp URL are independent. Waiting on the
+  // SSM origin lookup used to delay onMessageReceived for every new thread.
+  const sessionUrlPromise = isThreadRoot ? getWebappSessionUrl(workerId) : Promise.resolve(undefined);
+  const slackDisplayNamePromise = userId ? resolveSlackDisplayName(client, userId) : Promise.resolve(undefined);
+  const imageKeysPromise = Promise.all(
+    event.files
+      ?.filter((file: { mimetype?: string }) => file?.mimetype?.startsWith('image/'))
+      .map(async (file: { id: string; mimetype?: string }) => {
+        const image = await client.files.info({
+          file: file.id,
+        });
 
-  // Resolve Slack display name so we can attribute the message to its sender
-  // in the LLM conversation history.
-  const slackDisplayName = userId ? await resolveSlackDisplayName(client, userId) : undefined;
+        if (image.file?.url_private_download && image.file.filetype && image.file.mimetype) {
+          const fileContent = await fetch(image.file.url_private_download, {
+            headers: { Authorization: `Bearer ${BotToken}` },
+          }).then((res) => res.arrayBuffer());
+
+          const key = `${workerId}/${file.id}.${image.file.filetype}`;
+          await s3.send(
+            new PutObjectCommand({
+              Bucket: BucketName,
+              Key: key,
+              Body: Buffer.from(fileContent),
+              ContentType: image.file.mimetype,
+            })
+          );
+
+          return key;
+        }
+      }) ?? []
+  ).then((keys) => keys.filter((key) => key != null));
+
+  const [imageKeys, slackDisplayName] = await Promise.all([imageKeysPromise, slackDisplayNamePromise]);
 
   const promises = [
+    ensureInstance,
+    sessionInfo,
     saveConversationHistory(workerId, message, userId, imageKeys, slackDisplayName),
     sendWorkerEvent(workerId, { type: 'onMessageReceived' }),
     sendWebappEvent(workerId, { type: 'message', role: 'user', message }),
     updateSessionLastMessage(workerId, message.slice(0, 500)),
     sendWebappEvent(workerId, { type: 'lastMessageUpdate', lastMessage: message.slice(0, 500) }),
-    lambda.send(
-      new InvokeCommand({
-        FunctionName: AsyncLambdaName,
-        Payload: JSON.stringify({
-          type: 'ensureInstance',
-          workerId,
-          slackChannelId: event.channel,
-          slackThreadTs: event.ts,
-        } satisfies AsyncHandlerEvent),
-        InvocationType: 'Event',
-      })
-    ),
   ];
-
-  // Save session info only when starting a new thread
-  if (event.thread_ts === undefined) {
-    promises.push(
-      saveSessionInfo(workerId, message, userId, event.channel, event.ts, { customAgentId, githubAccountId })
-    );
-  }
 
   const agentTipElements = selectedAgentName
     ? [
@@ -175,104 +184,106 @@ export async function handleMessage(
     ...promises,
     // Send initial message only when starting a new thread
     event.thread_ts === undefined
-      ? client.chat.postMessage({
-          channel: channel,
-          thread_ts: event.ts,
-          text: `Hi, please wait for your agent to launch.`,
-          blocks: [
-            {
-              type: 'section',
-              text: {
-                type: 'mrkdwn',
-                text: `${userId ? `Hi <@${userId}>, p` : 'P'}lease wait for your agent to launch.\n\n*Useful Tips:*`,
-              },
-            },
-            {
-              type: 'rich_text',
-              elements: [
-                {
-                  type: 'rich_text_list',
-                  style: 'bullet',
-                  indent: 0,
-                  elements: [
-                    {
-                      type: 'rich_text_section',
-                      elements: agentTipElements,
-                    },
-                    ...(sessionUrl
-                      ? [
-                          {
-                            type: 'rich_text_section',
-                            elements: [
-                              {
-                                type: 'text',
-                                text: 'View this session in WebApp: ',
-                              },
-                              {
-                                type: 'link',
-                                url: sessionUrl,
-                                text: 'Open in Web UI',
-                                style: {
-                                  bold: true,
-                                },
-                              },
-                            ],
-                          } as any,
-                        ]
-                      : [
-                          {
-                            type: 'rich_text_section',
-                            elements: [
-                              {
-                                type: 'text',
-                                text: 'You can view ',
-                              },
-                              {
-                                type: 'link',
-                                url: cloudwatchUrl,
-                                text: 'the execution log here',
-                                style: {
-                                  bold: true,
-                                },
-                              },
-                            ],
-                          },
-                        ]),
-                    {
-                      type: 'rich_text_section',
-                      elements: [
-                        {
-                          type: 'text',
-                          text: 'Send ',
-                        },
-                        {
-                          type: 'text',
-                          text: 'dump_history',
-                          style: {
-                            code: true,
-                          },
-                        },
-                        {
-                          type: 'text',
-                          text: ' to get conversation history and token consumption stats.',
-                        },
-                      ],
-                    },
-                    {
-                      type: 'rich_text_section',
-                      elements: [
-                        {
-                          type: 'text',
-                          text: 'You can always interrupt and ask them to stop what they are doing.',
-                        },
-                      ],
-                    },
-                  ],
+      ? sessionUrlPromise.then((sessionUrl) =>
+          client.chat.postMessage({
+            channel: channel,
+            thread_ts: event.ts,
+            text: `Hi, please wait for your agent to launch.`,
+            blocks: [
+              {
+                type: 'section',
+                text: {
+                  type: 'mrkdwn',
+                  text: `${userId ? `Hi <@${userId}>, p` : 'P'}lease wait for your agent to launch.\n\n*Useful Tips:*`,
                 },
-              ],
-            },
-          ],
-        })
+              },
+              {
+                type: 'rich_text',
+                elements: [
+                  {
+                    type: 'rich_text_list',
+                    style: 'bullet',
+                    indent: 0,
+                    elements: [
+                      {
+                        type: 'rich_text_section',
+                        elements: agentTipElements,
+                      },
+                      ...(sessionUrl
+                        ? [
+                            {
+                              type: 'rich_text_section',
+                              elements: [
+                                {
+                                  type: 'text',
+                                  text: 'View this session in WebApp: ',
+                                },
+                                {
+                                  type: 'link',
+                                  url: sessionUrl,
+                                  text: 'Open in Web UI',
+                                  style: {
+                                    bold: true,
+                                  },
+                                },
+                              ],
+                            } as any,
+                          ]
+                        : [
+                            {
+                              type: 'rich_text_section',
+                              elements: [
+                                {
+                                  type: 'text',
+                                  text: 'You can view ',
+                                },
+                                {
+                                  type: 'link',
+                                  url: cloudwatchUrl,
+                                  text: 'the execution log here',
+                                  style: {
+                                    bold: true,
+                                  },
+                                },
+                              ],
+                            },
+                          ]),
+                      {
+                        type: 'rich_text_section',
+                        elements: [
+                          {
+                            type: 'text',
+                            text: 'Send ',
+                          },
+                          {
+                            type: 'text',
+                            text: 'dump_history',
+                            style: {
+                              code: true,
+                            },
+                          },
+                          {
+                            type: 'text',
+                            text: ' to get conversation history and token consumption stats.',
+                          },
+                        ],
+                      },
+                      {
+                        type: 'rich_text_section',
+                        elements: [
+                          {
+                            type: 'text',
+                            text: 'You can always interrupt and ask them to stop what they are doing.',
+                          },
+                        ],
+                      },
+                    ],
+                  },
+                ],
+              },
+            ],
+          })
+        )
       : client.reactions.add({
           channel: channel,
           name: 'eyes',

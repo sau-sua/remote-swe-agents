@@ -26,9 +26,9 @@ app.post('/invocations', async (req, res) => {
     getCurrentStatus = () => (tracker.isBusy() ? 'busy' : 'idle');
   }
 
-  // Always update instance status to 'running' on invocation,
-  // even if the session was already started (e.g. after stop→resume)
-  await updateInstanceStatus(sessionId, 'running');
+  // main() already marks the session running. Do not block InvokeAgentRuntime
+  // on a second DynamoDB write — that delays Slack AsyncHandler completion.
+  void updateInstanceStatus(sessionId, 'running');
 
   res.json({
     response: 'ok',

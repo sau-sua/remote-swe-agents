@@ -2,7 +2,11 @@ import { Handler } from 'aws-lambda';
 import { App, AwsLambdaReceiver, LogLevel } from '@slack/bolt';
 import z from 'zod';
 import { getOrCreateWorkerInstance, getSession } from '@remote-swe-agents/agent-core/lib';
-import { resolveRuntimeType } from '@remote-swe-agents/agent-core/schema';
+import {
+  resolveRuntimeType,
+  resolveRuntimeTypeForNewSession,
+  runtimeTypeSchema,
+} from '@remote-swe-agents/agent-core/schema';
 import { makeIdempotent } from './util/idempotency';
 import { IdempotencyAlreadyInProgressError, IdempotencyConfig } from '@aws-lambda-powertools/idempotency';
 
@@ -26,6 +30,7 @@ const eventSchema = z.discriminatedUnion('type', [
     workerId: z.string(),
     slackChannelId: z.string(),
     slackThreadTs: z.string(),
+    runtimeType: runtimeTypeSchema.optional(),
   }),
 ]);
 
@@ -43,8 +48,13 @@ export const handler: Handler<unknown> = async (rawEvent, context) => {
       // the first invocation very soon. To avoid it, we use makeIdempotent here.
       await makeIdempotent(
         async (_: string) => {
-          const session = await getSession(event.workerId);
-          const runtimeType = resolveRuntimeType(session?.runtimeType);
+          let runtimeType;
+          if (event.runtimeType) {
+            runtimeType = resolveRuntimeType(event.runtimeType);
+          } else {
+            const session = await getSession(event.workerId);
+            runtimeType = session ? resolveRuntimeType(session.runtimeType) : resolveRuntimeTypeForNewSession();
+          }
           const res = await getOrCreateWorkerInstance(event.workerId, runtimeType);
 
           if (res.oldStatus == 'stopped') {

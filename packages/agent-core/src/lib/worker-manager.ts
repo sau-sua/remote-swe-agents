@@ -22,6 +22,14 @@ const LaunchTemplateId = process.env.WORKER_LAUNCH_TEMPLATE_ID!;
 const WorkerAmiParameterName = process.env.WORKER_AMI_PARAMETER_NAME ?? '';
 const SubnetIdList = process.env.SUBNET_ID_LIST?.split(',') ?? [];
 
+/** Image Builder writes this until the first AMI is published. It is not a bootable AMI id. */
+export const PENDING_WORKER_AMI_PLACEHOLDER = 'pending-initial-build';
+
+export const isUsableWorkerAmiId = (value: string | undefined): value is string => {
+  const trimmed = value?.trim() ?? '';
+  return trimmed.length > 0 && trimmed !== PENDING_WORKER_AMI_PLACEHOLDER;
+};
+
 /**
  * Updates the instance status in DynamoDB and sends a webapp event
  */
@@ -42,15 +50,7 @@ export async function updateInstanceStatus(workerId: string, status: InstanceSta
   }
 }
 
-async function findStoppedWorkerInstance(workerId: string) {
-  return findWorkerInstanceWithStatus(workerId, ['running', 'stopped']);
-}
-
-async function findRunningWorkerInstance(workerId: string) {
-  return findWorkerInstanceWithStatus(workerId, ['running', 'pending']);
-}
-
-async function findWorkerInstanceWithStatus(workerId: string, statuses: string[]): Promise<string | null> {
+async function findWorkerInstance(workerId: string): Promise<{ instanceId: string; state: string } | null> {
   const describeCommand = new DescribeInstancesCommand({
     Filters: [
       {
@@ -59,25 +59,33 @@ async function findWorkerInstanceWithStatus(workerId: string, statuses: string[]
       },
       {
         Name: 'instance-state-name',
-        Values: statuses,
+        Values: ['running', 'pending', 'stopped'],
       },
     ],
   });
 
   try {
     const response = await ec2.send(describeCommand);
-
-    if (response.Reservations && response.Reservations.length > 0) {
-      const instances = response.Reservations[0].Instances;
-      if (instances && instances.length > 0) {
-        return instances[0].InstanceId || null;
-      }
+    const instances = response.Reservations?.flatMap((reservation) => reservation.Instances ?? []) ?? [];
+    const preferred =
+      instances.find((instance) => instance.State?.Name === 'running' || instance.State?.Name === 'pending') ??
+      instances[0];
+    if (!preferred?.InstanceId) {
+      return null;
     }
-    return null;
+    return { instanceId: preferred.InstanceId, state: preferred.State?.Name ?? 'stopped' };
   } catch (error) {
-    console.error(`Error finding worker instance with status ${statuses.join(',')}`, error);
+    console.error('Error finding worker instance', error);
     throw error;
   }
+}
+
+async function findWorkerInstanceWithStatus(workerId: string, statuses: string[]): Promise<string | null> {
+  const found = await findWorkerInstance(workerId);
+  if (!found || !statuses.includes(found.state)) {
+    return null;
+  }
+  return found.instanceId;
 }
 
 async function restartWorkerInstance(instanceId: string) {
@@ -100,7 +108,8 @@ async function fetchWorkerAmiId(workerAmiParameterName: string): Promise<string 
         Name: workerAmiParameterName,
       })
     );
-    return result.Parameter?.Value;
+    const value = result.Parameter?.Value;
+    return isUsableWorkerAmiId(value) ? value : undefined;
   } catch (e) {
     if (e instanceof ParameterNotFound) {
       return;
@@ -167,9 +176,10 @@ async function createWorkerInstance(
   workerId: string,
   launchTemplateId: string,
   workerAmiParameterName: string,
-  subnetId: string
+  subnetId: string,
+  prefetchedImageId?: string
 ): Promise<{ instanceId: string; usedCache: boolean }> {
-  const imageId = await fetchWorkerAmiId(workerAmiParameterName);
+  const imageId = prefetchedImageId ?? (await fetchWorkerAmiId(workerAmiParameterName));
 
   const tryLaunch = async (useSpot: boolean) => {
     const input = buildRunInstancesInput(workerId, launchTemplateId, imageId, subnetId, useSpot);
@@ -218,13 +228,8 @@ export async function getOrCreateWorkerInstance(
         'Bedrock Agent Core is not deployed (AGENT_RUNTIME_ARN is empty). Set DEPLOY_BEDROCK_RUNTIME=true and redeploy, or use an EC2 worker.'
       );
     }
-    // Only set 'starting' if the session is not already running
-    const session = await getSession(workerId);
-    const currentInstanceStatus = session?.instanceStatus;
-    if (currentInstanceStatus !== 'running') {
-      await updateInstanceStatus(workerId, 'starting');
-    }
-    const res = await agentCore.send(
+    // Invoke first — DynamoDB status writes must not delay container wake.
+    const invoke = agentCore.send(
       new InvokeAgentRuntimeCommand({
         agentRuntimeArn,
         runtimeSessionId: workerId,
@@ -232,36 +237,37 @@ export async function getOrCreateWorkerInstance(
         contentType: 'application/json',
       })
     );
-    // Update to 'running' after successful invocation
-    // (also done in the container, but doing it here ensures it works
-    // even with older container images)
+    const session = await getSession(workerId);
+    const currentInstanceStatus = session?.instanceStatus;
+    if (currentInstanceStatus !== 'running') {
+      void updateInstanceStatus(workerId, 'starting');
+    }
+    await invoke;
     await updateInstanceStatus(workerId, 'running');
     return { instanceId: 'local', oldStatus: currentInstanceStatus === 'running' ? 'running' : 'stopped' };
   }
 
-  // First, check if an instance with this workerId is already running
-  const runningInstanceId = await findRunningWorkerInstance(workerId);
-  if (runningInstanceId) {
-    return { instanceId: runningInstanceId, oldStatus: 'running' };
+  // One DescribeInstances call covers running, pending, and stopped.
+  // Fetch the AMI id in parallel so a cold launch does not wait on SSM after EC2.
+  const [found, imageId] = await Promise.all([findWorkerInstance(workerId), fetchWorkerAmiId(WorkerAmiParameterName)]);
+  if (found && (found.state === 'running' || found.state === 'pending')) {
+    return { instanceId: found.instanceId, oldStatus: 'running' };
   }
-
-  // Then, check if a stopped instance exists and start it
-  const stoppedInstanceId = await findStoppedWorkerInstance(workerId);
-  if (stoppedInstanceId) {
+  if (found) {
     await updateInstanceStatus(workerId, 'starting');
-    await restartWorkerInstance(stoppedInstanceId);
-    return { instanceId: stoppedInstanceId, oldStatus: 'stopped' };
+    await restartWorkerInstance(found.instanceId);
+    return { instanceId: found.instanceId, oldStatus: 'stopped' };
   }
 
   // choose subnet randomly
   const subnetId = SubnetIdList[Math.floor(Math.random() * SubnetIdList.length)];
-  // If no instance exists, create a new one
   await updateInstanceStatus(workerId, 'starting');
   const { instanceId, usedCache } = await createWorkerInstance(
     workerId,
     LaunchTemplateId,
     WorkerAmiParameterName,
-    subnetId
+    subnetId,
+    imageId
   );
   return { instanceId, oldStatus: 'terminated', usedCache };
 }

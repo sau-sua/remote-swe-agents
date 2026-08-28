@@ -227,7 +227,8 @@ export class Worker extends Construct {
     userData.addCommands(
       `
 apt-get -o DPkg::Lock::Timeout=-1 update
-apt-get -o DPkg::Lock::Timeout=-1 upgrade -y
+# Skip apt-get upgrade: Image Builder already bakes a patched AMI, and this
+# step adds minutes to the rare no-AMI cold launch.
 
 # Install python3
 apt-get -o DPkg::Lock::Timeout=-1 install -y python3-pip unzip
@@ -484,6 +485,7 @@ Environment=EVENT_TRIGGER_SFN_ROLE_ARN=${eventTrigger.schedulerRole.roleArn}
 Environment=EVENT_TRIGGER_TTL_SFN_ARN=${eventTrigger.ttlStateMachine.stateMachineArn}
 Environment=EVENT_TRIGGER_TTL_SFN_ROLE_ARN=${eventTrigger.schedulerRole.roleArn}
 Environment=EVENT_TRIGGER_RESOURCE_PREFIX=${eventTrigger.resourcePrefix}
+Environment=WORKER_IDLE_TIMEOUT_SECONDS=1800
 
 [Install]
 WantedBy=multi-user.target

@@ -46,6 +46,7 @@ export class SlackBolt extends Construct {
     const asyncHandler = new DockerImageFunction(this, 'AsyncHandler', {
       code: slackImage.toLambdaDockerImageCode({ cmd: ['async-handler.handler'] }),
       timeout: Duration.minutes(10),
+      memorySize: 1024,
       environment: {
         WORKER_LAUNCH_TEMPLATE_ID: props.launchTemplateId,
         WORKER_AMI_PARAMETER_NAME: props.workerAmiIdParameter.parameterName,
@@ -69,7 +70,7 @@ export class SlackBolt extends Construct {
     const handler = new DockerImageFunction(this, 'Handler', {
       code: slackImage.toLambdaDockerImageCode(),
       timeout: Duration.seconds(29),
-      memorySize: 256,
+      memorySize: 1024,
       environment: {
         SIGNING_SECRET: signingSecretParameter.stringValue,
         BOT_TOKEN: botTokenParameter.stringValue,
@@ -79,6 +80,7 @@ export class SlackBolt extends Construct {
         BUCKET_NAME: props.storage.bucket.bucketName,
         LOG_GROUP_NAME: props.workerLogGroupName,
         WEBAPP_ORIGIN_NAME_PARAMETER: webappOriginNameParameter.parameterName,
+        AGENT_RUNTIME_ARN: props.agentCoreRuntime?.runtimeArn ?? '',
         ...(props.adminUserIdList ? { ADMIN_USER_ID_LIST: props.adminUserIdList } : {}),
       },
       architecture: Architecture.ARM_64,

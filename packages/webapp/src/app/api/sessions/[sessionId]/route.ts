@@ -12,7 +12,7 @@ import { ddb, TableName } from '@remote-swe-agents/agent-core/aws';
 import { PutCommand } from '@aws-sdk/lib-dynamodb';
 import { z } from 'zod';
 import { extractUserMessage, formatMessage } from '@/lib/message-formatter';
-import { MessageItem, modelTypeSchema } from '@remote-swe-agents/agent-core/schema';
+import { MessageItem, modelTypeSchema, resolveRuntimeType } from '@remote-swe-agents/agent-core/schema';
 
 // Schema for request validation
 const sendMessageSchema = z.object({
@@ -72,12 +72,11 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     })
   );
 
-  // Start EC2 instance for the worker
-  await getOrCreateWorkerInstance(sessionId);
-
-  // Send worker event to notify message received
-  await sendWorkerEvent(sessionId, { type: 'onMessageReceived' });
-  await sendWebappEvent(sessionId, { type: 'message', role: 'user', message });
+  await Promise.all([
+    getOrCreateWorkerInstance(sessionId, resolveRuntimeType(session.runtimeType)),
+    sendWorkerEvent(sessionId, { type: 'onMessageReceived' }),
+    sendWebappEvent(sessionId, { type: 'message', role: 'user', message }),
+  ]);
 
   return NextResponse.json({ success: true }, { status: 200 });
 }
