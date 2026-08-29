@@ -72,8 +72,8 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     })
   );
 
+  await getOrCreateWorkerInstance(sessionId, resolveRuntimeType(session.runtimeType));
   await Promise.all([
-    getOrCreateWorkerInstance(sessionId, resolveRuntimeType(session.runtimeType)),
     sendWorkerEvent(sessionId, { type: 'onMessageReceived' }),
     sendWebappEvent(sessionId, { type: 'message', role: 'user', message }),
   ]);

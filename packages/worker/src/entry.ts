@@ -149,9 +149,8 @@ export const main = async (workerId: string) => {
     } catch (e) {
       console.error('refreshSession on re-invoke failed:', e);
     }
-    // A second InvokeAgentRuntime used to return without starting work, so
-    // a follow-up Slack ensureInstance could leave the session idle.
-    trackers[workerId]?.startOnMessageReceived();
+    // Do not startOnMessageReceived here: callers already send that event
+    // after Invoke returns, and a warm session is already subscribed.
     return trackers[workerId];
   }
 

@@ -85,9 +85,9 @@ export const sendMessageToAgent = authActionClient
         lastMessage: lastMessagePreview,
         lastMessageAt: Date.now(),
       }),
-      sendWorkerEvent(workerId, { type: 'onMessageReceived' }),
       ensureInstance,
     ]);
+    await sendWorkerEvent(workerId, { type: 'onMessageReceived' });
 
     return { success: true, item };
   });

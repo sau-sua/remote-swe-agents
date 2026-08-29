@@ -182,10 +182,10 @@ export const createSession = async (params: CreateSessionParams): Promise<string
   );
 
   try {
-    await Promise.all([
-      getOrCreateWorkerInstance(workerId, runtimeType),
-      sendWorkerEvent(workerId, { type: 'onMessageReceived' }),
-    ]);
+    // Invoke/start first so AppSync is subscribed, then notify. Sending the
+    // event in parallel dropped onMessageReceived on Agent Core cold start.
+    await getOrCreateWorkerInstance(workerId, runtimeType);
+    await sendWorkerEvent(workerId, { type: 'onMessageReceived' });
   } catch (e) {
     await updateInstanceStatus(workerId, 'terminated');
     throw e;
