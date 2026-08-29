@@ -48,7 +48,7 @@ export interface WorkerProps {
    */
   anthropicAuthTokenParameter?: IStringParameter;
   /**
-   * OpenAI API key. When set, GPT-5.3 Codex is available as a model.
+   * OpenAI API key. When set, GPT-5.6 Sol, GPT-5.5, GPT-5.4, and GPT-5.3 Codex are available as models.
    */
   openaiApiKeyParameter?: IStringParameter;
   /**

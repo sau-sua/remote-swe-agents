@@ -11,7 +11,11 @@ export const calculateCost = (
   cacheReadTokens: number,
   cacheWriteTokens: number
 ) => {
-  const config = Object.values(modelConfigs).find((config) => modelId.includes(config.modelId));
+  // Prefer the longest matching modelId so regional Bedrock prefixes still match
+  // and shorter ids (gpt-5.4) are not chosen over more specific ones.
+  const config = Object.values(modelConfigs)
+    .filter((candidate) => modelId.includes(candidate.modelId))
+    .sort((a, b) => b.modelId.length - a.modelId.length)[0];
   if (!config) return 0;
 
   const pricing = config.pricing;

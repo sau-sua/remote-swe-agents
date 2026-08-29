@@ -7,19 +7,24 @@ const baseInput = (userText = 'hello'): Omit<ConverseCommandInput, 'modelId'> =>
 });
 
 describe('convertToOpenAIFormat', () => {
-  test('maps user text and system prompt', () => {
-    const result = convertToOpenAIFormat(
-      {
-        ...baseInput(),
-        system: [{ text: 'You are an agent.' }],
-      },
-      'gpt-5.3-codex'
-    );
+  test.each(['gpt-5.6-sol', 'gpt-5.5', 'gpt-5.4', 'gpt-5.3-codex'] as const)(
+    'maps user text and system prompt for %s',
+    (modelType) => {
+      const result = convertToOpenAIFormat(
+        {
+          ...baseInput(),
+          system: [{ text: 'You are an agent.' }],
+        },
+        modelType
+      );
 
-    expect(result.instructions).toBe('You are an agent.');
-    expect(result.input).toEqual([{ type: 'message', role: 'user', content: [{ type: 'input_text', text: 'hello' }] }]);
-    expect(result.reasoning).toEqual({ effort: 'high' });
-  });
+      expect(result.instructions).toBe('You are an agent.');
+      expect(result.input).toEqual([
+        { type: 'message', role: 'user', content: [{ type: 'input_text', text: 'hello' }] },
+      ]);
+      expect(result.reasoning).toEqual({ effort: 'high' });
+    }
+  );
 
   test('uses xhigh effort for ultrathink', () => {
     const result = convertToOpenAIFormat(baseInput('please ultrathink this'), 'gpt-5.3-codex');
