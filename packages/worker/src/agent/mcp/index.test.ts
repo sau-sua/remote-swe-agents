@@ -16,7 +16,7 @@ vi.mock('./mcp-client', () => ({
   buildMcpStdioEnv: vi.fn(),
 }));
 
-import { closeMcpServers, getMcpToolSpecs, resetMcpClients, tryExecuteMcpTool } from './index';
+import { closeMcpServers, getMcpToolSpecs, MCP_START_TIMEOUT_MS, resetMcpClients, tryExecuteMcpTool } from './index';
 import type { McpConfig } from '@remote-swe-agents/agent-core/schema';
 
 const fetchConfig: McpConfig = {
@@ -73,6 +73,33 @@ describe('getMcpToolSpecs', () => {
       'w1',
       expect.stringContaining('MCP server fetch failed to start')
     );
+  });
+
+  test('times out a hanging MCP server start so other tools remain available', async () => {
+    vi.useFakeTimers();
+    try {
+      mockFromCommand
+        .mockImplementationOnce(() => new Promise(() => {}))
+        .mockResolvedValueOnce({
+          tools: [{ toolSpec: { name: 'fetch' } }],
+          cleanup: vi.fn(),
+          callTool: vi.fn(),
+        });
+
+      const pending = getMcpToolSpecs('w1', {
+        mcpServers: {
+          playwright: { command: 'npx', args: ['-y', '@playwright/mcp@latest'] },
+          fetch: { command: 'uvx', args: ['mcp-server-fetch'] },
+        },
+      });
+
+      await vi.advanceTimersByTimeAsync(MCP_START_TIMEOUT_MS);
+      const tools = await pending;
+      expect(tools.map((t) => t.toolSpec?.name)).toEqual(['fetch']);
+      expect(mockSendSystemMessage).toHaveBeenCalledWith('w1', expect.stringContaining('timed out'));
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   test('tryExecuteMcpTool routes to the client that owns the tool', async () => {

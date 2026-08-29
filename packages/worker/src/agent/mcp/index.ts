@@ -5,6 +5,25 @@ import { sendSystemMessage } from '@remote-swe-agents/agent-core/lib';
 
 let clientsMap: { [key: string]: { name: string; client: MCPClient }[] } = {};
 
+/** Per-server cap so a hung playwright/npx start cannot stall the first agent turn. */
+export const MCP_START_TIMEOUT_MS = 30_000;
+
+export const withTimeout = <T>(promise: Promise<T>, ms: number, label: string): Promise<T> => {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error(`${label} timed out after ${ms}ms`)), ms);
+    promise.then(
+      (value) => {
+        clearTimeout(timer);
+        resolve(value);
+      },
+      (error) => {
+        clearTimeout(timer);
+        reject(error);
+      }
+    );
+  });
+};
+
 const initMcp = async (workerId: string, config: McpConfig) => {
   const failures: string[] = [];
   clientsMap[workerId] = (
@@ -15,9 +34,17 @@ const initMcp = async (workerId: string, config: McpConfig) => {
           try {
             let client: MCPClient;
             if ('command' in serverConfig) {
-              client = await MCPClient.fromCommand(serverConfig.command, serverConfig.args, serverConfig.env);
+              client = await withTimeout(
+                MCPClient.fromCommand(serverConfig.command, serverConfig.args, serverConfig.env),
+                MCP_START_TIMEOUT_MS,
+                `MCP server ${name}`
+              );
             } else {
-              client = await MCPClient.fromUrl(serverConfig.url);
+              client = await withTimeout(
+                MCPClient.fromUrl(serverConfig.url),
+                MCP_START_TIMEOUT_MS,
+                `MCP server ${name}`
+              );
             }
             return { name, client };
           } catch (e) {

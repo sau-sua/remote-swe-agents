@@ -1,7 +1,7 @@
 import { Handler } from 'aws-lambda';
 import { App, AwsLambdaReceiver, LogLevel } from '@slack/bolt';
 import z from 'zod';
-import { getOrCreateWorkerInstance, getSession } from '@remote-swe-agents/agent-core/lib';
+import { getOrCreateWorkerInstance, getSession, sendWorkerEvent } from '@remote-swe-agents/agent-core/lib';
 import {
   resolveRuntimeType,
   resolveRuntimeTypeForNewSession,
@@ -9,6 +9,7 @@ import {
 } from '@remote-swe-agents/agent-core/schema';
 import { makeIdempotent } from './util/idempotency';
 import { IdempotencyAlreadyInProgressError, IdempotencyConfig } from '@aws-lambda-powertools/idempotency';
+import { slackEnsureInstanceNotice } from './util/ensure-instance-notice';
 
 const BotToken = process.env.BOT_TOKEN!;
 
@@ -57,17 +58,20 @@ export const handler: Handler<unknown> = async (rawEvent, context) => {
           }
           const res = await getOrCreateWorkerInstance(event.workerId, runtimeType);
 
-          if (res.oldStatus == 'stopped') {
+          // InvokeAgentRuntime returns after /invocations, so AppSync is subscribed.
+          // The Slack Handler's onMessageReceived often fired during container
+          // pull and was dropped. Re-send once the worker is actually up.
+          // Skip when already running: the Handler event + re-invoke path cover that.
+          if (res.oldStatus !== 'running') {
+            await sendWorkerEvent(event.workerId, { type: 'onMessageReceived' });
+          }
+
+          const notice = slackEnsureInstanceNotice(res.oldStatus, runtimeType, res.usedCache);
+          if (notice) {
             await app.client.chat.postMessage({
               channel: event.slackChannelId,
               thread_ts: event.slackThreadTs,
-              text: `Waking up from sleep mode...`,
-            });
-          } else if (res.oldStatus == 'terminated') {
-            await app.client.chat.postMessage({
-              channel: event.slackChannelId,
-              thread_ts: event.slackThreadTs,
-              text: `Preparing for a new instance${res.usedCache ? ' (using a cached AMI)' : ''}...`,
+              text: notice,
             });
           }
         },

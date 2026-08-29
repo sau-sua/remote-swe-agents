@@ -7,7 +7,7 @@ import { setKillTimer, pauseKillTimer, restartKillTimer } from './common/kill-ti
 import { CancellationToken } from './common/cancellation-token';
 import { sendSystemMessage, updateInstanceStatus, workerEventSchema } from '@remote-swe-agents/agent-core/lib';
 import { updateAgentStatusWithEvent } from './common/status';
-import { refreshSession } from './common/refresh-session';
+import { refreshSession, waitForSlackDestination } from './common/refresh-session';
 import { terminateMyself } from './common/ec2';
 
 Object.assign(global, { WebSocket: require('ws') });
@@ -139,16 +139,30 @@ class ConverseSessionTracker {
 }
 
 const isStarted: { [key: string]: boolean } = {};
+const trackers: { [key: string]: ConverseSessionTracker } = {};
+
 export const main = async (workerId: string) => {
   if (isStarted[workerId]) {
     console.log(`The worker ${workerId} is already started.`);
-    await refreshSession(workerId);
-    return;
+    try {
+      await refreshSession(workerId);
+    } catch (e) {
+      console.error('refreshSession on re-invoke failed:', e);
+    }
+    // A second InvokeAgentRuntime used to return without starting work, so
+    // a follow-up Slack ensureInstance could leave the session idle.
+    trackers[workerId]?.startOnMessageReceived();
+    return trackers[workerId];
   }
 
   isStarted[workerId] = true;
-  await refreshSession(workerId);
+  try {
+    await waitForSlackDestination(workerId);
+  } catch (e) {
+    console.error('waitForSlackDestination failed; continuing without Slack dest:', e);
+  }
   const tracker = new ConverseSessionTracker(workerId);
+  trackers[workerId] = tracker;
   // Resume from DynamoDB before AppSync connects. Container cold start is dominated
   // by image pull + process boot; waiting on WebSockets delayed the first agent turn.
   tracker.startResume();
