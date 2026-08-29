@@ -33,6 +33,12 @@ test('calculateCost for haiku3.5 model', () => {
   expect(cost).toBe(expectedCost);
 });
 
+test('calculateCost for gpt-5.6-sol', () => {
+  const cost = calculateCost('gpt-5.6-sol', 1000, 500, 200, 100);
+  const expectedCost = (1000 * 0.004 + 500 * 0.02 + 200 * 0.0004 + 100 * 0.005) / 1000;
+  expect(cost).toBe(expectedCost);
+});
+
 test('calculateCost for gpt-5.5', () => {
   const cost = calculateCost('gpt-5.5', 1000, 500, 200, 100);
   const expectedCost = (1000 * 0.005 + 500 * 0.03 + 200 * 0.0005 + 100 * 0.005) / 1000;

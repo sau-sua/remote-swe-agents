@@ -106,7 +106,7 @@ Replace `your-claude-code-oauth-token-here` with the token from `claude setup-to
 
 **Optional: If Using OpenAI Codex**
 
-To make GPT-5.5, GPT-5.4, and GPT-5.3 Codex available alongside Bedrock/Anthropic models, create an SSM parameter for your OpenAI API key:
+To make GPT-5.6 Sol, GPT-5.5, GPT-5.4, and GPT-5.3 Codex available alongside Bedrock/Anthropic models, create an SSM parameter for your OpenAI API key:
 
 ```bash
 aws ssm put-parameter \
@@ -259,7 +259,7 @@ Any non-empty `CLAUDE_CODE_OAUTH_TOKEN` enables lookup of the SSM parameter `/re
 
 #### For Using OpenAI Codex:
 
-You can enable GPT-5.5, GPT-5.4, and GPT-5.3 Codex in addition to Bedrock or Anthropic models. Add this to your `.env.local` file:
+You can enable GPT-5.6 Sol, GPT-5.5, GPT-5.4, and GPT-5.3 Codex in addition to Bedrock or Anthropic models. Add this to your `.env.local` file:
 
 ```sh
 OPENAI_API_KEY=sk-your-openai-api-key-here

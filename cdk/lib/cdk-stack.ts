@@ -92,7 +92,7 @@ export interface MainStackProps extends cdk.StackProps {
   readonly anthropicAuthTokenParameterName?: string;
 
   /**
-   * OpenAI API key parameter name. When set, GPT-5.5, GPT-5.4, and GPT-5.3 Codex are available as models.
+   * OpenAI API key parameter name. When set, GPT-5.6 Sol, GPT-5.5, GPT-5.4, and GPT-5.3 Codex are available as models.
    */
   readonly openaiApiKeyParameterName?: string;
 

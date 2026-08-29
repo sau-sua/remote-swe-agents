@@ -7,7 +7,7 @@ const baseInput = (userText = 'hello'): Omit<ConverseCommandInput, 'modelId'> =>
 });
 
 describe('convertToOpenAIFormat', () => {
-  test.each(['gpt-5.5', 'gpt-5.4', 'gpt-5.3-codex'] as const)(
+  test.each(['gpt-5.6-sol', 'gpt-5.5', 'gpt-5.4', 'gpt-5.3-codex'] as const)(
     'maps user text and system prompt for %s',
     (modelType) => {
       const result = convertToOpenAIFormat(

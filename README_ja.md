@@ -104,7 +104,7 @@ aws ssm put-parameter \
 
 **オプション：OpenAI Codexを使用する場合**
 
-Bedrock / Anthropicモデルに加えて GPT-5.5、GPT-5.4、GPT-5.3 Codex を使えるようにするには、OpenAI APIキー用のSSMパラメータを作成します：
+Bedrock / Anthropicモデルに加えて GPT-5.6 Sol、GPT-5.5、GPT-5.4、GPT-5.3 Codex を使えるようにするには、OpenAI APIキー用のSSMパラメータを作成します：
 
 ```bash
 aws ssm put-parameter \
@@ -257,7 +257,7 @@ CLAUDE_CODE_OAUTH_TOKEN=sk-ant-oat01-your-oauth-token-here
 
 #### OpenAI Codexを使用する場合：
 
-Bedrock や Anthropic のモデルに加えて GPT-5.5、GPT-5.4、GPT-5.3 Codex を有効にするには、`.env.local` に以下を追加します：
+Bedrock や Anthropic のモデルに加えて GPT-5.6 Sol、GPT-5.5、GPT-5.4、GPT-5.3 Codex を有効にするには、`.env.local` に以下を追加します：
 
 ```sh
 OPENAI_API_KEY=sk-your-openai-api-key-here

@@ -3,6 +3,7 @@ import { z } from 'zod';
 export const modelTypeList = [
   'opus5',
   'sonnet5',
+  'gpt-5.6-sol',
   'gpt-5.5',
   'gpt-5.4',
   'gpt-5.3-codex',
@@ -83,6 +84,21 @@ export const modelConfigs: Record<ModelType, z.infer<typeof modelConfigSchema>> 
     assistantPrefillSupport: false,
     supportedCriProfiles: ['global', 'us', 'eu', 'au'],
     pricing: { input: 0.005, output: 0.025, cacheRead: 0.0005, cacheWrite: 0.00625 },
+  },
+  'gpt-5.6-sol': {
+    name: 'GPT-5.6 Sol',
+    modelId: 'gpt-5.6-sol',
+    maxOutputTokens: 128_000,
+    maxInputTokens: 1_050_000,
+    cacheSupport: [],
+    reasoningSupport: true,
+    toolChoiceSupport: ['any', 'auto', 'tool'],
+    assistantPrefillSupport: false,
+    provider: 'openai',
+    supportedCriProfiles: ['global', 'us', 'eu', 'apac', 'jp', 'au'],
+    // OpenAI pricing is $/1M tokens; this codebase stores $/1K.
+    // Cached input is 10% of input; cache writes are 1.25x uncached input.
+    pricing: { input: 0.004, output: 0.02, cacheRead: 0.0004, cacheWrite: 0.005 },
   },
   'gpt-5.5': {
     name: 'GPT-5.5',

@@ -3,6 +3,7 @@ import { getAvailableModelTypes, isOpenAIModel } from './model';
 
 describe('isOpenAIModel', () => {
   test('true for Codex family, false for Claude', () => {
+    expect(isOpenAIModel('gpt-5.6-sol')).toBe(true);
     expect(isOpenAIModel('gpt-5.5')).toBe(true);
     expect(isOpenAIModel('gpt-5.4')).toBe(true);
     expect(isOpenAIModel('gpt-5.3-codex')).toBe(true);
@@ -17,6 +18,7 @@ describe('getAvailableModelTypes', () => {
     delete process.env.OPENAPI_KEY;
     delete process.env.OPENAI_API_KEY_PARAMETER_NAME;
     const available = getAvailableModelTypes();
+    expect(available).toContain('gpt-5.6-sol');
     expect(available).toContain('gpt-5.5');
     expect(available).toContain('gpt-5.4');
     expect(available).toContain('gpt-5.3-codex');
