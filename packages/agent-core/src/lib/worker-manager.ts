@@ -222,9 +222,7 @@ async function createWorkerInstance(
  * Agent Core used to return `stopped` for every non-running session, which posted
  * "Waking up from sleep mode..." on a brand-new launch.
  */
-export const agentCoreLaunchStatus = (
-  currentInstanceStatus?: InstanceStatus
-): 'running' | 'stopped' | 'terminated' => {
+export const agentCoreLaunchStatus = (currentInstanceStatus?: InstanceStatus): 'running' | 'stopped' | 'terminated' => {
   if (currentInstanceStatus === 'running') return 'running';
   if (currentInstanceStatus === 'stopped') return 'stopped';
   return 'terminated';
