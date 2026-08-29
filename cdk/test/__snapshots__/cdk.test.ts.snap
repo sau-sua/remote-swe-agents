@@ -2695,6 +2695,7 @@ exports.handler = async (event) => {
             "async-handler.handler",
           ],
         },
+        "MemorySize": 1024,
         "PackageType": "Image",
         "Role": {
           "Fn::GetAtt": [
@@ -2948,6 +2949,7 @@ exports.handler = async (event) => {
         },
         "Environment": {
           "Variables": {
+            "AGENT_RUNTIME_ARN": "",
             "ASYNC_LAMBDA_NAME": {
               "Ref": "SlackBoltAsyncHandler9A0D467E",
             },
@@ -2981,7 +2983,7 @@ exports.handler = async (event) => {
             },
           },
         },
-        "MemorySize": 256,
+        "MemorySize": 1024,
         "PackageType": "Image",
         "Role": {
           "Fn::GetAtt": [
@@ -5718,7 +5720,9 @@ phases:
 
               apt-get -o DPkg::Lock::Timeout=-1 update
 
-              apt-get -o DPkg::Lock::Timeout=-1 upgrade -y
+              # Skip apt-get upgrade: Image Builder already bakes a patched AMI, and this
+
+              # step adds minutes to the rare no-AMI cold launch.
 
 
               # Install python3
@@ -6129,6 +6133,8 @@ phases:
               "
 
               Environment=EVENT_TRIGGER_RESOURCE_PREFIX=tesger3a47e907
+
+              Environment=WORKER_IDLE_TIMEOUT_SECONDS=1800
 
 
               [Install]
@@ -6561,7 +6567,9 @@ phases:
 
               apt-get -o DPkg::Lock::Timeout=-1 update
 
-              apt-get -o DPkg::Lock::Timeout=-1 upgrade -y
+              # Skip apt-get upgrade: Image Builder already bakes a patched AMI, and this
+
+              # step adds minutes to the rare no-AMI cold launch.
 
 
               # Install python3
@@ -6973,6 +6981,8 @@ phases:
 
               Environment=EVENT_TRIGGER_RESOURCE_PREFIX=tesger3a47e907
 
+              Environment=WORKER_IDLE_TIMEOUT_SECONDS=1800
+
 
               [Install]
 
@@ -7206,7 +7216,8 @@ phases:
                 [
                   "#!/bin/bash
 apt-get -o DPkg::Lock::Timeout=-1 update
-apt-get -o DPkg::Lock::Timeout=-1 upgrade -y
+# Skip apt-get upgrade: Image Builder already bakes a patched AMI, and this
+# step adds minutes to the rare no-AMI cold launch.
 
 # Install python3
 apt-get -o DPkg::Lock::Timeout=-1 install -y python3-pip unzip
@@ -7454,6 +7465,7 @@ Environment=EVENT_TRIGGER_TTL_SFN_ROLE_ARN=",
                   },
                   "
 Environment=EVENT_TRIGGER_RESOURCE_PREFIX=tesger3a47e907
+Environment=WORKER_IDLE_TIMEOUT_SECONDS=1800
 
 [Install]
 WantedBy=multi-user.target

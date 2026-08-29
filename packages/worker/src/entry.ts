@@ -7,7 +7,7 @@ import { setKillTimer, pauseKillTimer, restartKillTimer } from './common/kill-ti
 import { CancellationToken } from './common/cancellation-token';
 import { sendSystemMessage, updateInstanceStatus, workerEventSchema } from '@remote-swe-agents/agent-core/lib';
 import { updateAgentStatusWithEvent } from './common/status';
-import { refreshSession } from './common/refresh-session';
+import { refreshSession, waitForSlackDestination } from './common/refresh-session';
 import { terminateMyself } from './common/ec2';
 
 Object.assign(global, { WebSocket: require('ws') });
@@ -139,18 +139,38 @@ class ConverseSessionTracker {
 }
 
 const isStarted: { [key: string]: boolean } = {};
+const trackers: { [key: string]: ConverseSessionTracker } = {};
+
 export const main = async (workerId: string) => {
   if (isStarted[workerId]) {
     console.log(`The worker ${workerId} is already started.`);
-    await refreshSession(workerId);
-    return;
+    try {
+      await refreshSession(workerId);
+    } catch (e) {
+      console.error('refreshSession on re-invoke failed:', e);
+    }
+    // Do not startOnMessageReceived here: callers already send that event
+    // after Invoke returns, and a warm session is already subscribed.
+    return trackers[workerId];
   }
 
   isStarted[workerId] = true;
-  await refreshSession(workerId);
+  try {
+    await waitForSlackDestination(workerId);
+  } catch (e) {
+    console.error('waitForSlackDestination failed; continuing without Slack dest:', e);
+  }
   const tracker = new ConverseSessionTracker(workerId);
+  trackers[workerId] = tracker;
+  // Resume from DynamoDB before AppSync connects. Container cold start is dominated
+  // by image pull + process boot; waiting on WebSockets delayed the first agent turn.
+  tracker.startResume();
+  setKillTimer(workerId);
 
-  const broadcast = await events.connect('/event-bus/broadcast');
+  const [broadcast, unicast] = await Promise.all([
+    events.connect('/event-bus/broadcast'),
+    events.connect(`/event-bus/worker/${workerId}`),
+  ]);
   broadcast.subscribe({
     next: (data) => {
       console.log('received broadcast', data);
@@ -158,7 +178,6 @@ export const main = async (workerId: string) => {
     error: (err) => console.log(err),
   });
 
-  const unicast = await events.connect(`/event-bus/worker/${workerId}`);
   unicast.subscribe({
     next: async (data) => {
       const { data: event, error, success } = workerEventSchema.safeParse(data.event);
@@ -186,18 +205,14 @@ export const main = async (workerId: string) => {
     error: (err) => console.log(err),
   });
 
-  setKillTimer(workerId);
-
-  try {
-    // Update instance status to "running" in DynamoDB
-    await updateInstanceStatus(workerId, 'running');
-
-    await sendSystemMessage(workerId, 'the instance has successfully launched!');
-    tracker.startResume();
-  } catch (e) {
-    await sendSystemMessage(workerId, `An error occurred: ${e}`);
+  // Do not block the Agent Core HTTP response on Slack "launched" notices.
+  void Promise.all([
+    updateInstanceStatus(workerId, 'running'),
+    sendSystemMessage(workerId, 'the instance has successfully launched!'),
+  ]).catch((e) => {
+    sendSystemMessage(workerId, `An error occurred: ${e}`).catch((err) => console.log(err));
     console.log(e);
-  }
+  });
 
   return tracker;
 };

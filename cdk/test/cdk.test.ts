@@ -59,3 +59,54 @@ test('Snapshot test', () => {
   expect(Template.fromStack(usEast1Stack)).toMatchSnapshot('UsEast1Stack');
   expect(Template.fromStack(main)).toMatchSnapshot('MainStack');
 });
+
+test('Agent Core runtime keeps idle sessions warm for 30 minutes', () => {
+  jest.useFakeTimers().setSystemTime(new Date('2020-01-01'));
+
+  const app = new cdk.App({
+    context: {
+      ...JSON.parse(readFileSync('cdk.json').toString()).context,
+    },
+  });
+
+  const usEast1Stack = new UsEast1Stack(app, 'IdleTimeoutUsEast1Stack', {
+    env: {
+      account: '123456789012',
+      region: 'us-east-1',
+    },
+    crossRegionReferences: true,
+    allowedIpV4AddressRanges: ['192.168.1.0/24'],
+    allowedIpV6AddressRanges: ['2001:db8::/32'],
+    allowedCountryCodes: ['JP'],
+  });
+
+  const main = new MainStack(app, 'IdleTimeoutMainStack', {
+    env: {
+      account: '123456789012',
+      region: 'us-east-1',
+    },
+    crossRegionReferences: true,
+    signPayloadHandler: usEast1Stack.signPayloadHandler,
+    cloudFrontWebAclArn: usEast1Stack.webAclArn,
+    slack: {
+      botTokenParameterName: '/remote-swe/slack/bot-token',
+      signingSecretParameterName: '/remote-swe/slack/signing-secret',
+    },
+    github: {
+      privateKeyParameterName: '/remote-swe/github/app-private-key',
+      appId: '123456',
+      installationId: '9876543',
+    },
+    deployBedrockRuntime: true,
+  });
+
+  Template.fromStack(main).hasResourceProperties('AWS::BedrockAgentCore::Runtime', {
+    LifecycleConfiguration: {
+      IdleRuntimeSessionTimeout: 1800,
+      MaxLifetime: 28800,
+    },
+    EnvironmentVariables: {
+      WORKER_IDLE_TIMEOUT_SECONDS: '1800',
+    },
+  });
+});

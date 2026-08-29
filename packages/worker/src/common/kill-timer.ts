@@ -6,11 +6,22 @@ import { randomBytes } from 'crypto';
 let killTimer: NodeJS.Timeout | undefined = undefined;
 let paused = false;
 
-// You can use setKillTimer to kill the process after 15 minutes.
-// If setKillTimer is called before 15 minutes elapsed, the timer count is reset and another
-// 15 minutes is required to kill the process.
 const workerRuntime = process.env.WORKER_RUNTIME ?? 'ec2';
 const isAgentCore = workerRuntime === 'agent-core';
+
+const DEFAULT_IDLE_TIMEOUT_SECONDS = 30 * 60;
+
+export const getIdleTimeoutMs = (): number => {
+  const raw = process.env.WORKER_IDLE_TIMEOUT_SECONDS;
+  const seconds = raw == null || raw === '' ? DEFAULT_IDLE_TIMEOUT_SECONDS : Number(raw);
+  if (!Number.isFinite(seconds) || seconds < 60) {
+    return DEFAULT_IDLE_TIMEOUT_SECONDS * 1000;
+  }
+  return seconds * 1000;
+};
+
+// Reset on every user message. After this much idle time the worker stops itself
+// so the next message pays a cold start. Default 30 minutes (was 15).
 
 // You can use setKillTimer to kill the process after 30 minutes.
 // If setKillTimer is called before 30 minutes elapsed, the timer count is reset and another
@@ -41,67 +52,64 @@ export const setKillTimer = (workerId: string) => {
   if (killTimer) {
     clearTimeout(killTimer);
   }
-  killTimer = setTimeout(
-    async () => {
-      await refreshSession(workerId);
+  killTimer = setTimeout(async () => {
+    await refreshSession(workerId);
 
-      const isEc2 = workerRuntime === 'ec2';
-      let isSpot = false;
-      if (isEc2) {
-        try {
-          isSpot = (await getInstanceLifecycle()) === 'spot';
-        } catch {
-          isSpot = true;
-        }
-      }
-
+    const isEc2 = workerRuntime === 'ec2';
+    let isSpot = false;
+    if (isEc2) {
       try {
-        await updateInstanceStatus(workerId, isSpot ? 'terminated' : 'stopped');
-      } catch (e) {
-        console.error('Kill timer: error updating instance status before stop:', e);
+        isSpot = (await getInstanceLifecycle()) === 'spot';
+      } catch {
+        isSpot = true;
       }
+    }
 
-      let stopped = false;
-      try {
-        if (isAgentCore) {
-          stopped = await stopMyself(workerId);
-        } else if (isSpot) {
-          stopped = await terminateMyself();
-        } else {
-          stopped = await stopMyself();
-        }
-      } catch (e) {
-        console.error('Kill timer: stop/terminate failed:', e);
-      }
+    try {
+      await updateInstanceStatus(workerId, isSpot ? 'terminated' : 'stopped');
+    } catch (e) {
+      console.error('Kill timer: error updating instance status before stop:', e);
+    }
 
-      if (!stopped) {
-        console.error(
-          'Kill timer: stop/terminate did not succeed (check AGENT_RUNTIME_ARN, IAM, or EC2 metadata); notifying user and rescheduling timer'
-        );
-        try {
-          await sendSystemMessage(
-            workerId,
-            'Idle timeout reached but automatic shutdown failed. Please stop the session from the Web UI, or send a message to continue.'
-          );
-        } catch (e) {
-          console.error('Kill timer: sendSystemMessage (shutdown failure notice) failed:', e);
-        }
-        setKillTimer(workerId);
-        return;
-      }
-
-      try {
-        await sendSystemMessage(workerId, 'Going to sleep mode. You can wake me up at any time.');
-      } catch (e) {
-        console.error('Kill timer: sendSystemMessage failed:', e);
-      }
-
+    let stopped = false;
+    try {
       if (isAgentCore) {
-        process.exit(0);
+        stopped = await stopMyself(workerId);
+      } else if (isSpot) {
+        stopped = await terminateMyself();
+      } else {
+        stopped = await stopMyself();
       }
-    },
-    15 * 60 * 1000
-  );
+    } catch (e) {
+      console.error('Kill timer: stop/terminate failed:', e);
+    }
+
+    if (!stopped) {
+      console.error(
+        'Kill timer: stop/terminate did not succeed (check AGENT_RUNTIME_ARN, IAM, or EC2 metadata); notifying user and rescheduling timer'
+      );
+      try {
+        await sendSystemMessage(
+          workerId,
+          'Idle timeout reached but automatic shutdown failed. Please stop the session from the Web UI, or send a message to continue.'
+        );
+      } catch (e) {
+        console.error('Kill timer: sendSystemMessage (shutdown failure notice) failed:', e);
+      }
+      setKillTimer(workerId);
+      return;
+    }
+
+    try {
+      await sendSystemMessage(workerId, 'Going to sleep mode. You can wake me up at any time.');
+    } catch (e) {
+      console.error('Kill timer: sendSystemMessage failed:', e);
+    }
+
+    if (isAgentCore) {
+      process.exit(0);
+    }
+  }, getIdleTimeoutMs());
 };
 
 let restartToken = '';

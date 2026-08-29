@@ -184,9 +184,17 @@ export class AgentCoreRuntime extends Construct implements IGrantable {
         EVENT_TRIGGER_TTL_SFN_ARN: props.eventTrigger.ttlStateMachine.stateMachineArn,
         EVENT_TRIGGER_TTL_SFN_ROLE_ARN: props.eventTrigger.schedulerRole.roleArn,
         EVENT_TRIGGER_RESOURCE_PREFIX: props.eventTrigger.resourcePrefix,
+        WORKER_IDLE_TIMEOUT_SECONDS: '1800',
       },
     });
     runtime.node.addDependency(role);
+
+    // Default idle timeout is 15 minutes, which forces a container cold start
+    // on the next Slack reply. Keep sessions warm for 30 minutes to match the worker kill timer.
+    runtime.addPropertyOverride('LifecycleConfiguration', {
+      IdleRuntimeSessionTimeout: 1800,
+      MaxLifetime: 28800,
+    });
 
     this.runtimeArn = runtime.attrAgentRuntimeArn;
 

@@ -12,6 +12,15 @@ export const setSlackDestination = (channelId: string, threadTs: string) => {
   disableSlack = false;
 };
 
+export const hasSlackDestination = (): boolean => !disableSlack;
+
+/** @internal test helper */
+export const __resetSlackDestinationForTests = () => {
+  SlackChannelId = '';
+  SlackThreadTs = '';
+  disableSlack = true;
+};
+
 let _app: App | undefined = undefined;
 
 const getApp = async () => {
@@ -99,6 +108,10 @@ export const sendMessageToSlack = async (message: string) => {
     console.log(`[Slack] ${message}`);
     return;
   }
+  if (!SlackBotToken) {
+    console.error('[Slack] SLACK_BOT_TOKEN is empty; worker messages will not reach Slack');
+    return;
+  }
 
   // Process message to ensure proper URL linking
   const processedMessage = processMessageForLinks(message);
@@ -110,24 +123,28 @@ export const sendMessageToSlack = async (message: string) => {
   // Split message into chunks if it exceeds 3000 characters
   const messageChunks = splitMessageByNewlines(processedMessage, 3000);
 
-  const app = await getApp();
+  try {
+    const app = await getApp();
 
-  // Send each chunk as a separate message
-  for (const chunk of messageChunks) {
-    await app.client.chat.postMessage({
-      channel: SlackChannelId,
-      thread_ts: SlackThreadTs,
-      text: chunk,
-      blocks: [
-        {
-          type: 'section',
-          text: {
-            type: 'mrkdwn',
-            text: chunk,
+    // Send each chunk as a separate message
+    for (const chunk of messageChunks) {
+      await app.client.chat.postMessage({
+        channel: SlackChannelId,
+        thread_ts: SlackThreadTs,
+        text: chunk,
+        blocks: [
+          {
+            type: 'section',
+            text: {
+              type: 'mrkdwn',
+              text: chunk,
+            },
           },
-        },
-      ],
-    });
+        ],
+      });
+    }
+  } catch (e) {
+    console.error('[Slack] Failed to post message:', e);
   }
 };
 

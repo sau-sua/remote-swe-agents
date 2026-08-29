@@ -77,16 +77,17 @@ export const sendMessageToAgent = authActionClient
     );
 
     const lastMessagePreview = message.slice(0, 500);
-    await updateSessionLastMessage(workerId, lastMessagePreview);
-    await sendWebappEvent(workerId, {
-      type: 'lastMessageUpdate',
-      lastMessage: lastMessagePreview,
-      lastMessageAt: Date.now(),
-    });
-
+    const ensureInstance = getOrCreateWorkerInstance(workerId, resolveRuntimeType(session.runtimeType));
+    await Promise.all([
+      updateSessionLastMessage(workerId, lastMessagePreview),
+      sendWebappEvent(workerId, {
+        type: 'lastMessageUpdate',
+        lastMessage: lastMessagePreview,
+        lastMessageAt: Date.now(),
+      }),
+      ensureInstance,
+    ]);
     await sendWorkerEvent(workerId, { type: 'onMessageReceived' });
-
-    await getOrCreateWorkerInstance(workerId, resolveRuntimeType(session.runtimeType));
 
     return { success: true, item };
   });

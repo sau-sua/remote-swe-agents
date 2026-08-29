@@ -17,6 +17,14 @@ export const isAgentCoreRuntimeAvailable = (): boolean => Boolean(process.env.AG
 export const getDefaultRuntimeType = (): RuntimeType => (isAgentCoreRuntimeAvailable() ? 'agent-core' : 'ec2');
 
 /**
+ * Runtime for a Slack/web session that has not been written to DynamoDB yet.
+ * Unlike {@link resolveRuntimeType}(undefined) which treats missing as legacy EC2,
+ * new sessions should prefer Agent Core when it is deployed.
+ */
+export const resolveRuntimeTypeForNewSession = (requested?: RuntimeType): RuntimeType =>
+  resolveRuntimeType(requested ?? getDefaultRuntimeType());
+
+/**
  * Coerce a requested/stored runtime type to one that can actually run.
  * Missing type is treated as EC2 (legacy sessions). Agent Core falls back to EC2
  * when AGENT_RUNTIME_ARN is unset (DEPLOY_BEDROCK_RUNTIME=false).

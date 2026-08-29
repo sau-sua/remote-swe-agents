@@ -1,7 +1,7 @@
 import { TransactWriteCommand } from '@aws-sdk/lib-dynamodb';
 import { PutCommand } from '@aws-sdk/lib-dynamodb';
 import { ddb, TableName } from './aws';
-import { MessageItem, ModelType, SessionItem, getDefaultRuntimeType, resolveRuntimeType } from '../schema';
+import { MessageItem, ModelType, SessionItem, resolveRuntimeTypeForNewSession } from '../schema';
 import { getOrCreateWorkerInstance, updateInstanceStatus } from './worker-manager';
 import { sendWorkerEvent } from './events';
 import { getCustomAgent } from './custom-agent';
@@ -64,7 +64,7 @@ export const createSession = async (params: CreateSessionParams): Promise<string
   } = params;
   const agent = await getCustomAgent(customAgentId);
   const githubAccountId = await resolveGitHubAccountId(requestedGithubAccountId);
-  const runtimeType = resolveRuntimeType(agent?.runtimeType ?? getDefaultRuntimeType());
+  const runtimeType = resolveRuntimeTypeForNewSession(agent?.runtimeType);
 
   let workerId = `session-${Date.now()}`;
   if (runtimeType === 'agent-core') {
@@ -182,6 +182,8 @@ export const createSession = async (params: CreateSessionParams): Promise<string
   );
 
   try {
+    // Invoke/start first so AppSync is subscribed, then notify. Sending the
+    // event in parallel dropped onMessageReceived on Agent Core cold start.
     await getOrCreateWorkerInstance(workerId, runtimeType);
     await sendWorkerEvent(workerId, { type: 'onMessageReceived' });
   } catch (e) {

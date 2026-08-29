@@ -1,5 +1,10 @@
 import { afterEach, describe, expect, test } from 'vitest';
-import { getDefaultRuntimeType, isAgentCoreRuntimeAvailable, resolveRuntimeType } from './agent';
+import {
+  getDefaultRuntimeType,
+  isAgentCoreRuntimeAvailable,
+  resolveRuntimeType,
+  resolveRuntimeTypeForNewSession,
+} from './agent';
 
 const originalArn = process.env.AGENT_RUNTIME_ARN;
 
@@ -60,5 +65,23 @@ describe('resolveRuntimeType', () => {
     expect(resolveRuntimeType('ec2')).toBe('ec2');
     process.env.AGENT_RUNTIME_ARN = 'arn:aws:bedrock-agentcore:us-east-1:123:runtime/abc';
     expect(resolveRuntimeType('ec2')).toBe('ec2');
+  });
+});
+
+describe('resolveRuntimeTypeForNewSession', () => {
+  test('prefers agent-core when the runtime is deployed and nothing was requested', () => {
+    process.env.AGENT_RUNTIME_ARN = 'arn:aws:bedrock-agentcore:us-east-1:123:runtime/abc';
+    expect(resolveRuntimeTypeForNewSession(undefined)).toBe('agent-core');
+  });
+
+  test('falls back to EC2 when Agent Core is not deployed', () => {
+    delete process.env.AGENT_RUNTIME_ARN;
+    expect(resolveRuntimeTypeForNewSession(undefined)).toBe('ec2');
+  });
+
+  test('honors an explicit requested runtime when it can actually run', () => {
+    process.env.AGENT_RUNTIME_ARN = 'arn:aws:bedrock-agentcore:us-east-1:123:runtime/abc';
+    expect(resolveRuntimeTypeForNewSession('ec2')).toBe('ec2');
+    expect(resolveRuntimeTypeForNewSession('agent-core')).toBe('agent-core');
   });
 });
